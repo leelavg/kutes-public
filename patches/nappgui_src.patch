@@ -1,0 +1,93 @@
+diff --git a/src/draw2d/gtk/osfont.c b/src/draw2d/gtk/osfont.c
+index 162f24d..1c79969 100644
+--- a/src/draw2d/gtk/osfont.c
++++ b/src/draw2d/gtk/osfont.c
+@@ -62,7 +62,7 @@ void osfont_dealloc_globals(void)
+ 
+ static const char_t *i_monospace_font_family(void)
+ {
+-    const char_t *desired_fonts[] = {"Ubuntu Mono", "DejaVu Sans Mono", "Courier New"};
++    const char_t *desired_fonts[] = {"Noto Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono", "Courier New"};
+     return _draw2d_monospace_family(desired_fonts, sizeof(desired_fonts) / sizeof(const char_t *));
+ }
+ 
+@@ -402,4 +402,4 @@ void dctx_set_default_osfont(DCtx *ctx, const void *font)
+     kFONT_REGULAR_SIZE = size * scale;
+     kFONT_SMALL_SIZE = kFONT_REGULAR_SIZE - 2.f;
+     kFONT_MINI_SIZE = kFONT_REGULAR_SIZE - 4.f;
+-}
+\ No newline at end of file
++}
+diff --git a/src/osapp/gtk/osapp_gtk.c b/src/osapp/gtk/osapp_gtk.c
+index f24b902..1856cbb 100644
+--- a/src/osapp/gtk/osapp_gtk.c
++++ b/src/osapp/gtk/osapp_gtk.c
+@@ -64,7 +64,6 @@ OSApp *_osapp_init_imp(
+     FPtr_app_call func_OnFinishLaunching,
+     FPtr_app_call func_OnTimerSignal)
+ {
+-    static char GDK_BACKEND[64];
+     bmem_zero(&i_APP, OSApp);
+     cassert_unref(instance == NULL, instance);
+     cassert_no_null(listener);
+@@ -72,8 +71,6 @@ OSApp *_osapp_init_imp(
+     cassert(i_APP.listener == NULL);
+     cassert(i_APP.func_OnFinishLaunching == NULL);
+     cassert(i_APP.func_OnTimerSignal == NULL);
+-    str_copy_c(GDK_BACKEND, sizeof(GDK_BACKEND), "GDK_BACKEND=x11");
+-    putenv(GDK_BACKEND);
+     cassert(g_application_id_is_valid("com.nappgui.app") == TRUE);
+     i_APP.gtk_app = gtk_application_new("com.nappgui.app", G_APPLICATION_NON_UNIQUE);
+     cassert_no_null(i_APP.gtk_app);
+diff --git a/src/osgui/gtk/oswindow.c b/src/osgui/gtk/oswindow.c
+index 09b6b01..3b0b61e 100644
+--- a/src/osgui/gtk/oswindow.c
++++ b/src/osgui/gtk/oswindow.c
+@@ -27,7 +27,9 @@
+ #include <core/arrst.h>
+ #include <core/event.h>
+ #include <core/heap.h>
++#include <sewer/blib.h>
+ #include <sewer/cassert.h>
++#include <osbs/log.h>
+ 
+ #if !defined(__GTK3__)
+ #error This file is only for GTK Toolkit
+@@ -760,19 +762,33 @@ static void i_update_menu_size(OSWindow *window)
+ 
+ void oswindow_size(OSWindow *window, const real32_t width, const real32_t height)
+ {
++    real32_t wt = width;
++    real32_t ht = height;
++    char *backend = getenv("GDK_BACKEND");
++
+     cassert_no_null(window);
++    if (backend == NULL)
++        backend = getenv("XDG_SESSION_TYPE");
++
++    if (!blib_strcmp(backend, "wayland"))
++    {
++        wt += 50;
++        ht += 89;
++        log_printf("setting width (from %.2f to %.2f) and height (from %.2f to %.2f)", width, wt, height, ht);
++    }
++
+     if (window->is_resizable == TRUE)
+     {
+         window->resize_event = FALSE;
+-        gtk_window_resize(GTK_WINDOW(window->control.widget), (gint)width, (gint)height);
+-        window->current_width = (gint)width;
+-        window->current_height = (gint)height;
++        gtk_window_resize(GTK_WINDOW(window->control.widget), (gint)wt, (gint)ht);
++        window->current_width = (gint)wt;
++        window->current_height = (gint)ht;
+         window->minimun_width = -1;
+         window->minimun_height = -1;
+     }
+     else
+     {
+-        gtk_widget_set_size_request(window->control.widget, (gint)width, (gint)height);
++        gtk_widget_set_size_request(window->control.widget, (gint)wt, (gint)ht);
+     }
+ 
+     i_update_menu_size(window);

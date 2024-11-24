@@ -1,0 +1,6 @@
+build/*
+!build/_deps/
+!build/cmake/
+build/_deps/*build/
+build/_deps/*subbuild/
+.cache/*
