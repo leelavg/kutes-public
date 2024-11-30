@@ -1,0 +1,42 @@
+diff --git a/src/osgui/gtk/oswindow.c b/src/osgui/gtk/oswindow.c
+index 09b6b01..03c5d78 100644
+--- a/src/osgui/gtk/oswindow.c
++++ b/src/osgui/gtk/oswindow.c
+@@ -27,6 +27,7 @@
+ #include <core/arrst.h>
+ #include <core/event.h>
+ #include <core/heap.h>
++#include <sewer/blib.h>
+ #include <sewer/cassert.h>
+ 
+ #if !defined(__GTK3__)
+@@ -760,7 +761,20 @@ static void i_update_menu_size(OSWindow *window)
+ 
+ void oswindow_size(OSWindow *window, const real32_t width, const real32_t height)
+ {
++    real32_t wt = width;
++    real32_t ht = height;
++    char *backend = getenv("GDK_BACKEND");
++
+     cassert_no_null(window);
++    if (backend == NULL)
++        backend = getenv("XDG_SESSION_TYPE");
++
++    if (!blib_strcmp(backend, "wayland"))
++    {
++        wt += 50;
++        ht += 89;
++    }
++
+     if (window->is_resizable == TRUE)
+     {
+         window->resize_event = FALSE;
+@@ -772,7 +786,7 @@ void oswindow_size(OSWindow *window, const real32_t width, const real32_t height
+     }
+     else
+     {
+-        gtk_widget_set_size_request(window->control.widget, (gint)width, (gint)height);
++        gtk_widget_set_size_request(window->control.widget, (gint)wt, (gint)ht);
+     }
+ 
+     i_update_menu_size(window);

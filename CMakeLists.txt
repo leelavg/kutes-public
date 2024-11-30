@@ -16,12 +16,13 @@ CPMAddPackage(
   URL_HASH SHA256=a4ba556d0478a805d4e2d9163700afba699a986d3f1805422dc535cbe0b05e50
   DOWNLOAD_ONLY TRUE
 )
+file(GLOB PATCHES "patches/*.patch")
 CPMAddPackage(
   NAME nappgui_src
   # commit is on Nov 6, 2024
   URL https://github.com/frang75/nappgui_src/archive/40356b8.tar.gz
   URL_HASH SHA256=8057d424f3c71545453bb4ddabda9be3c468f1c19d5972d17b10ec15bbf90fef
-  PATCHES patches/nappgui_src.patch
+  PATCHES ${PATCHES}
   DOWNLOAD_ONLY TRUE
 )
 

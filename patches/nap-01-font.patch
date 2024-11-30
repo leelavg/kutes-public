@@ -1,0 +1,20 @@
+diff --git a/src/draw2d/gtk/osfont.c b/src/draw2d/gtk/osfont.c
+index 162f24d..1c79969 100644
+--- a/src/draw2d/gtk/osfont.c
++++ b/src/draw2d/gtk/osfont.c
+@@ -62,7 +62,7 @@ void osfont_dealloc_globals(void)
+ 
+ static const char_t *i_monospace_font_family(void)
+ {
+-    const char_t *desired_fonts[] = {"Ubuntu Mono", "DejaVu Sans Mono", "Courier New"};
++    const char_t *desired_fonts[] = {"Noto Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono", "Courier New"};
+     return _draw2d_monospace_family(desired_fonts, sizeof(desired_fonts) / sizeof(const char_t *));
+ }
+ 
+@@ -402,4 +402,4 @@ void dctx_set_default_osfont(DCtx *ctx, const void *font)
+     kFONT_REGULAR_SIZE = size * scale;
+     kFONT_SMALL_SIZE = kFONT_REGULAR_SIZE - 2.f;
+     kFONT_MINI_SIZE = kFONT_REGULAR_SIZE - 4.f;
+-}
+\ No newline at end of file
++}

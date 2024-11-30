@@ -29,7 +29,6 @@
 #include <core/heap.h>
 #include <sewer/blib.h>
 #include <sewer/cassert.h>
-#include <osbs/log.h>
 
 #if !defined(__GTK3__)
 #error This file is only for GTK Toolkit
@@ -774,15 +773,14 @@ void oswindow_size(OSWindow *window, const real32_t width, const real32_t height
     {
         wt += 50;
         ht += 89;
-        log_printf("setting width (from %.2f to %.2f) and height (from %.2f to %.2f)", width, wt, height, ht);
     }
 
     if (window->is_resizable == TRUE)
     {
         window->resize_event = FALSE;
-        gtk_window_resize(GTK_WINDOW(window->control.widget), (gint)wt, (gint)ht);
-        window->current_width = (gint)wt;
-        window->current_height = (gint)ht;
+        gtk_window_resize(GTK_WINDOW(window->control.widget), (gint)width, (gint)height);
+        window->current_width = (gint)width;
+        window->current_height = (gint)height;
         window->minimun_width = -1;
         window->minimun_height = -1;
     }
