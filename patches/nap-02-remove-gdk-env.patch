@@ -1,3 +1,7 @@
+Remove hardcoded GDK_BACKEND value
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
 diff --git a/src/osapp/gtk/osapp_gtk.c b/src/osapp/gtk/osapp_gtk.c
 index f24b902..1856cbb 100644
 --- a/src/osapp/gtk/osapp_gtk.c

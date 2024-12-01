@@ -1,0 +1,21 @@
+Use https://github.com/shepherdjerred/macos-cross-compiler to cross-compile
+for MacOSX aarch64 and x86_64 on Linux
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/prj/NAppCompilers.cmake b/prj/NAppCompilers.cmake
+index b01a91c..daba35a 100644
+--- a/prj/NAppCompilers.cmake
++++ b/prj/NAppCompilers.cmake
+@@ -182,7 +182,9 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+     endif()
+     nap_osx_build_arch(${CMAKE_ARCHITECTURE} CMAKE_OSX_ARCHITECTURES)
+ 
+-    if (${CMAKE_CXX_COMPILER_ID} STREQUAL "AppleClang")
++    if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "AppleClang") OR
++        ((${CMAKE_CROSSCOMPILING} AND
++         ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")))
+         include(${NAPPGUI_ROOT_PATH}/prj/NAppAppleClang.cmake)
+         nap_apple_clang_flags()
+ 
+

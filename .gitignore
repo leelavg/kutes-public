@@ -1,6 +1,3 @@
-build/*
-!build/_deps/
-!build/cmake/
-build/_deps/*build/
-build/_deps/*subbuild/
+build*/
 .cache/*
+compile_commands.json

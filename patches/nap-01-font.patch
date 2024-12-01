@@ -1,3 +1,8 @@
+On Fedora "Ubuntu Mono" isn't available and "Noto Sans Mono" was a combined
+effort and mostly be available in many systems.
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
 diff --git a/src/draw2d/gtk/osfont.c b/src/draw2d/gtk/osfont.c
 index 162f24d..1c79969 100644
 --- a/src/draw2d/gtk/osfont.c
@@ -15,6 +20,39 @@ index 162f24d..1c79969 100644
      kFONT_REGULAR_SIZE = size * scale;
      kFONT_SMALL_SIZE = kFONT_REGULAR_SIZE - 2.f;
      kFONT_MINI_SIZE = kFONT_REGULAR_SIZE - 4.f;
+-}
+\ No newline at end of file
++}
+diff --git a/src/draw2d/osx/osfont.m b/src/draw2d/osx/osfont.m
+index c23e92d..a10546e 100644
+--- a/src/draw2d/osx/osfont.m
++++ b/src/draw2d/osx/osfont.m
+@@ -87,7 +87,7 @@ static const char_t *i_monospace_font_family(void)
+ {
+     if (i_MONOSPACE_FONT_FAMILY == NULL)
+     {
+-        const char_t *desired_fonts[] = {"SF Mono", "Menlo", "Monaco", "Andale Mono", "Courier New"};
++        const char_t *desired_fonts[] = {"Noto Sans Mono", "SF Mono", "Menlo", "Monaco", "Andale Mono", "Courier New"};
+         const char_t *monofont = _draw2d_monospace_family(desired_fonts, sizeof(desired_fonts) / sizeof(const char_t *));
+         i_MONOSPACE_FONT_FAMILY = str_c(monofont);
+     }
+diff --git a/src/draw2d/win/osfont.cpp b/src/draw2d/win/osfont.cpp
+index d783003..fc6853e 100644
+--- a/src/draw2d/win/osfont.cpp
++++ b/src/draw2d/win/osfont.cpp
+@@ -130,7 +130,7 @@ static const char_t *i_system_font_family(void)
+ 
+ static const char_t *i_monospace_font_family(void)
+ {
+-    const char_t *desired_fonts[] = {"Consolas", "Courier New"};
++    const char_t *desired_fonts[] = {"Noto Sans Mono", "Consolas", "Courier New"};
+     return _draw2d_monospace_family(desired_fonts, sizeof(desired_fonts) / sizeof(const char_t *));
+ }
+ 
+@@ -497,4 +497,4 @@ ArrPt(String) *font_installed_families(void)
+ ArrPt(String) *font_installed_monospace(void)
+ {
+     return i_installed_families(TRUE);
 -}
 \ No newline at end of file
 +}

@@ -1,3 +1,10 @@
+Give higher priority to user set env or fallback to XDG_SESSION_TYPE.
+
+Current patch only calculates sizes for static windows, ie, no resize is
+allowed.
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
 diff --git a/src/osgui/gtk/oswindow.c b/src/osgui/gtk/oswindow.c
 index 09b6b01..03c5d78 100644
 --- a/src/osgui/gtk/oswindow.c

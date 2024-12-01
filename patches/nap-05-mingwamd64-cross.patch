@@ -1,0 +1,74 @@
+Changes require in CMake to compile windows executable on linux (fedora).
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/prj/NAppCompilers.cmake b/prj/NAppCompilers.cmake
+index b01a91c..8ae1307 100644
+--- a/prj/NAppCompilers.cmake
++++ b/prj/NAppCompilers.cmake
+@@ -32,6 +32,9 @@ macro(nap_config_compiler)
+ include(${NAPPGUI_ROOT_PATH}/prj/NAppUtils.cmake)
+ 
+ if (WIN32)
++    if(${CMAKE_CROSSCOMPILING})
++        set(CMAKE_SIZEOF_VOID_P 8)
++    endif()
+ 
+     if (${CMAKE_SIZEOF_VOID_P} STREQUAL 4)
+         set(CMAKE_HOST_ARCHITECTURE "x86")
+diff --git a/prj/NAppGenerateTools.cmake b/prj/NAppGenerateTools.cmake
+index 40ad1c2..2624b2b 100644
+--- a/prj/NAppGenerateTools.cmake
++++ b/prj/NAppGenerateTools.cmake
+@@ -22,15 +22,16 @@ function(nap_generate_tools)
+ 
+         include(${NAPPGUI_ROOT_PATH}/prj/NAppGenerators.cmake)
+         nap_generator_multiconfig(isMultiConfig)
+-        if (isMultiConfig)
+-            set(CMAKE_BUILD_OPTS "--config Debug")
++        if(${CMAKE_CROSSCOMPILING})
++            set(CMAKE_BUILD_OPTS "--toolchain ${CMAKE_TOOLCHAIN_FILE}")
+         endif()
+ 
+         # CMake configure
+         execute_process(
+                     COMMAND ${CMAKE_COMMAND}
+                     "-E" chdir "${TOOLS_BUILD_DIR}"
+-                    ${CMAKE_COMMAND} "-G" "${CMAKE_GENERATOR}"
++                    ${CMAKE_COMMAND} ${CMAKE_BUILD_OPTS}
++                    "-G" "${CMAKE_GENERATOR}"
+                     "-DNAPPGUI_ROOT_PATH=${NAPPGUI_ROOT_PATH}"
+                     "-DNAPPGUI_MAJOR=${NAPPGUI_MAJOR}"
+                     "-DNAPPGUI_MINOR=${NAPPGUI_MINOR}"
+diff --git a/prj/NAppTarget.cmake b/prj/NAppTarget.cmake
+index 2e6846a..7e99bdb 100644
+--- a/prj/NAppTarget.cmake
++++ b/prj/NAppTarget.cmake
+@@ -381,7 +381,11 @@ function(nap_resource_packs targetName targetType nrcMode dir _resFiles _resIncl
+                 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/res.rc "APPLICATION_ICON ICON \"res\\\\logo48.ico\"\n")
+                 set(globalRes ${resPath}/logo48.ico)
+             else()
+-                file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/res.rc "APPLICATION_ICON ICON \"res\\\\logo256.ico\"\n")
++                if(${CMAKE_CROSSCOMPILING})
++                    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/res.rc "APPLICATION_ICON ICON \"res/logo256.ico\"\n")
++                else ()
++                    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/res.rc "APPLICATION_ICON ICON \"res\\\\logo256.ico\"\n")
++                endif()
+                 set(globalRes ${resPath}/logo256.ico)
+             endif()
+ 
+@@ -453,6 +457,14 @@ function(nap_resource_packs targetName targetType nrcMode dir _resFiles _resIncl
+ 
+             file(TO_NATIVE_PATH ${resPackPath} RESPACK_NATIVE)
+             file(TO_NATIVE_PATH ${DEST_RESDIR}/${resPack}.c RESDEST_NATIVE)
++
++            if(${CMAKE_CROSSCOMPILING})
++                if (NOT EXISTS "${NATIVE_NRC_PATH}")
++                    message (FATAL_ERROR "Expected 'NATIVE_NRC_PATH' to be provided")
++                endif()
++                set(NAPPGUI_NRC "${NATIVE_NRC_PATH}")
++            endif()
++
+             execute_process(COMMAND "${NAPPGUI_NRC}" "${NRC_OPTION}" "${RESPACK_NATIVE}" "${RESDEST_NATIVE}" RESULT_VARIABLE nrcRes OUTPUT_VARIABLE nrcOut ERROR_VARIABLE nrcErr)
+             file(WRITE ${CMAKE_OUTPUT} ${nrcOut})
+             file(APPEND ${CMAKE_OUTPUT} ${nrcErr})

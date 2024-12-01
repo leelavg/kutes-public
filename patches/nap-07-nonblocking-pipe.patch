@@ -1,0 +1,97 @@
+diff --git a/src/osbs/osbs.hxx b/src/osbs/osbs.hxx
+index 3c0167c..1cbaa4f 100644
+--- a/src/osbs/osbs.hxx
++++ b/src/osbs/osbs.hxx
+@@ -126,7 +126,8 @@ typedef enum _perror_t
+ {
+     ekPPIPE = 1,
+     ekPEXEC,
+-    ekPOK
++    ekPOK,
++    ekPAGAIN
+ } perror_t;
+ 
+ typedef enum _serror_t
+diff --git a/src/osbs/unix/bproc.c b/src/osbs/unix/bproc.c
+index 8eb7857..7abe2a6 100644
+--- a/src/osbs/unix/bproc.c
++++ b/src/osbs/unix/bproc.c
+@@ -26,6 +27,7 @@
+ #include <signal.h>
+ #include <stdlib.h>
+ #include <errno.h>
++#include <fcntl.h>
+ 
+ #define STDIN_READ_CHILD 0
+ #define STDIN_WRITE_PARENT 1
+@@ -91,6 +93,12 @@ static bool_t i_pipes(int pipes[6])
+         return FALSE;
+     }
+ 
++    if (fcntl(pipes[2], F_SETFL, fcntl(pipes[2], F_GETFL) | O_NONBLOCK) < 0)
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     if (pipe(pipes + 4) == -1)
+     {
+         i_close_pipes(pipes);
+@@ -294,6 +302,12 @@ bool_t bproc_read(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsize
+         ptr_assign(error, ekPOK);
+         return FALSE;
+     }
++    else if (errno == EAGAIN)
++    {
++        ptr_assign(rsize, 0);
++        ptr_assign(error, ekPAGAIN);
++        return FALSE;
++    }
+     else
+     {
+         ptr_assign(rsize, 0);
+@@ -404,4 +418,4 @@ bool_t bproc_write_close(Proc *proc)
+ void bproc_exit(const uint32_t code)
+ {
+     exit((int)code);
+-}
+\ No newline at end of file
++}
+diff --git a/src/osbs/win/bproc.c b/src/osbs/win/bproc.c
+index c1d85b5..d550f76 100644
+--- a/src/osbs/win/bproc.c
++++ b/src/osbs/win/bproc.c
+@@ -67,6 +67,7 @@ static void i_close_pipes(HANDLE *pipes)
+ static bool_t i_pipes(HANDLE *pipes)
+ {
+     SECURITY_ATTRIBUTES saAttr;
++    DWORD nwMode;
+     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+     saAttr.bInheritHandle = TRUE;
+     saAttr.lpSecurityDescriptor = NULL;
+@@ -90,6 +91,13 @@ static bool_t i_pipes(HANDLE *pipes)
+         return FALSE;
+     }
+ 
++    nwMode = PIPE_NOWAIT;
++    if (!SetNamedPipeHandleState(pipes[STDOUT_READ_PARENT], &nwMode, NULL, NULL))
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     if (!SetHandleInformation(pipes[STDOUT_READ_PARENT], HANDLE_FLAG_INHERIT, 0))
+     {
+         i_close_pipes(pipes);
+@@ -273,6 +281,11 @@ static bool_t i_read_pipe(HANDLE pipe, byte_t *data, const uint32_t size, uint32
+             ptr_assign(rsize, 0);
+             ptr_assign(error, ekPOK);
+         }
++        else if (GetLastError() == ERROR_NO_DATA)
++        {
++            ptr_assign(rsize, 0);
++            ptr_assign(error, ekPAGAIN);
++        }
+         else
+         {
+             ptr_assign(rsize, 0);
