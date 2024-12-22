@@ -15,7 +15,7 @@ project(
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CPM_SOURCE_CACHE vendor/)
-file(GLOB PATCHES "patches/*.patch")
+file(GLOB PATCHES "support/patches/*.patch")
 file(
   DOWNLOAD
   https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.2/CPM.cmake
@@ -51,6 +51,12 @@ if (nappgui_src_ADDED)
   set(NAPPGUI_WEB FALSE)
   set(CMAKE_DISABLE_CRTDBG TRUE)
   add_subdirectory(${NAPPGUI_ROOT_PATH} EXCLUDE_FROM_ALL)
+  # to properly link nappgui
+  include(${NAPPGUI_ROOT_PATH}/prj/NAppCompilers.cmake)
+  # to set NAP_TARGET_SRC_EXTENSION
+  include(${NAPPGUI_ROOT_PATH}/prj/NAppTarget.cmake)
+  # to correctly detect platform
+  nap_config_compiler()
 endif()
 
 if (yyjson_ADDED)

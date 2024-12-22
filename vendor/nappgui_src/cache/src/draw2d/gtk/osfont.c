@@ -62,7 +62,7 @@ void osfont_dealloc_globals(void)
 
 static const char_t *i_monospace_font_family(void)
 {
-    const char_t *desired_fonts[] = {"Noto Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono", "Courier New"};
+    const char_t *desired_fonts[] = {"Ubuntu Mono", "DejaVu Sans Mono", "Courier New"};
     return _draw2d_monospace_family(desired_fonts, sizeof(desired_fonts) / sizeof(const char_t *));
 }
 

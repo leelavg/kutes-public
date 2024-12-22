@@ -1,3 +1,7 @@
+Make pipe read non blocking on windows & unix
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
 diff --git a/src/osbs/osbs.hxx b/src/osbs/osbs.hxx
 index 3c0167c..1cbaa4f 100644
 --- a/src/osbs/osbs.hxx

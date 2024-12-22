@@ -133,6 +133,7 @@ static bool_t i_exec(const char_t *command, int *pipes, pid_t *pid)
         close(pipes[STDERR_WRITE_CHILD]);
         close(pipes[STDERR_READ_PARENT]);
 
+        setsid();
         execlp("bash", "bash", "-c", command, NULL);
         cassert_msg(FALSE, "It's a zombie!");
         return FALSE;
@@ -212,8 +213,11 @@ void bproc_close(Proc **proc)
 bool_t bproc_cancel(Proc *proc)
 {
     cassert_no_null(proc);
-    if (kill(proc->pid, SIGKILL) == 0)
+    if (kill(-proc->pid, SIGHUP) == 0)
+    {
+        waitpid(proc->pid, NULL, 0);
         return TRUE;
+    }
     else
         return FALSE;
 }

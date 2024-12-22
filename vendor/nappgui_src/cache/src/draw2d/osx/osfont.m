@@ -87,7 +87,7 @@ static const char_t *i_monospace_font_family(void)
 {
     if (i_MONOSPACE_FONT_FAMILY == NULL)
     {
-        const char_t *desired_fonts[] = {"Noto Sans Mono", "SF Mono", "Menlo", "Monaco", "Andale Mono", "Courier New"};
+        const char_t *desired_fonts[] = {"SF Mono", "Menlo", "Monaco", "Andale Mono", "Courier New"};
         const char_t *monofont = _draw2d_monospace_family(desired_fonts, sizeof(desired_fonts) / sizeof(const char_t *));
         i_MONOSPACE_FONT_FAMILY = str_c(monofont);
     }

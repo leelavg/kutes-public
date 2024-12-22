@@ -130,7 +130,7 @@ static const char_t *i_system_font_family(void)
 
 static const char_t *i_monospace_font_family(void)
 {
-    const char_t *desired_fonts[] = {"Noto Sans Mono", "Consolas", "Courier New"};
+    const char_t *desired_fonts[] = {"Consolas", "Courier New"};
     return _draw2d_monospace_family(desired_fonts, sizeof(desired_fonts) / sizeof(const char_t *));
 }
 

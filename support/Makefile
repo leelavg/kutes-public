@@ -81,6 +81,14 @@ lowercase-headers: ## lowercase the windows related included header names.
 	@grep -rln '#include <WinInet.h>' | xargs sed -i 's/WinInet.h/wininet.h/'
 	@popd
 
+PATCH_FILE :=
+.PHONY: create-patch
+create-patch: ## creates patch file from vendor folder changes
+	@test "x${PATCH_FILE}" != x
+	@pushd ../
+	@git diff vendor/ | sed 's,vendor/nappgui_src/cache/src,src,g' > support/patches/${PATCH_FILE}
+	@popd
+
 EXTRA_ARGS :=
 .PHONY: linux64-c
 linux64-c: ## configure ninja multi-config build for linux64 target host.
@@ -93,6 +101,7 @@ linux64-c: ## configure ninja multi-config build for linux64 target host.
 linux64-b: ## build for linux64 target host.
 	@pushd ../
 	@cmake --build build-linux64 $(EXTRA_ARGS)
+	@ln -srf build-linux64/compile_commands.json compile_commands.json
 	@popd
 
 .PHONY: cross-mingwamd64-c
@@ -108,6 +117,7 @@ cross-mingwamd64-c: ## configure ninja multi-config build for windows amd64 syst
 cross-mingwamd64-b: ## build for windows amd64 system host.
 	@pushd ../
 	@cmake --build build-cross-mingwamd64 $(EXTRA_ARGS)
+	@ln -srf build-cross-mingwamd64/compile_commands.json compile_commands.json
 	@popd
 
 .PHONY: cross-osxaarch64-c
@@ -123,6 +133,7 @@ cross-osxaarch64-c: ## configure ninja multi-config build for MacOSX aarch64 sys
 cross-osxaarch64-b: ## build for MacOSX aarch64 system host.
 	@pushd ../
 	@cmake --build build-cross-osxaarch64 $(EXTRA_ARGS)
+	@ln -srf build-cross-osxaarch64/compile_commands.json compile_commands.json
 	@popd
 
 .PHONY: cross-osxamd64-c
@@ -138,5 +149,6 @@ cross-osxamd64-c: ## configure ninja multi-config build for MacOSX amd64 system 
 cross-osxamd64-b: ## build for MacOSX amd64 system host.
 	@pushd ../
 	@cmake --build build-cross-osxamd64 $(EXTRA_ARGS)
+	@ln -srf build-cross-osxamd64/compile_commands.json compile_commands.json
 	@popd
 
