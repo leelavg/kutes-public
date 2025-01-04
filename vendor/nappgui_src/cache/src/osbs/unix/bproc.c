@@ -11,6 +11,7 @@
 /* Processes */
 
 #include "bproc.h"
+#include "bthread.h"
 #include "osbs.inl"
 #include <sewer/bmem.h>
 #include <sewer/cassert.h>
@@ -23,6 +24,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/poll.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -34,6 +36,8 @@
 #define STDOUT_WRITE_CHILD 3
 #define STDERR_READ_PARENT 4
 #define STDERR_WRITE_CHILD 5
+#define CLOSE_WRITE 6
+#define CLOSE_READ 7
 
 #if defined __LINUX__
 int kill(pid_t pid, int sig);
@@ -41,7 +45,7 @@ int kill(pid_t pid, int sig);
 
 struct _process_t
 {
-    int pipes[6];
+    int pipes[8];
     pid_t pid;
 };
 
@@ -51,7 +55,7 @@ static Proc *i_create(int *pipes, pid_t pid)
 {
     Proc *proc = cast(bmem_malloc(sizeof(Proc)), Proc);
     _osbs_proc_alloc();
-    bmem_copy_n(proc->pipes, pipes, 6, int);
+    bmem_copy_n(proc->pipes, pipes, 8, int);
     proc->pid = pid;
     return proc;
 }
@@ -62,7 +66,7 @@ static void i_close_pipes(int *pipes)
 {
     uint32_t i;
     cassert_no_null(pipes);
-    for (i = 0; i < 6; ++i)
+    for (i = 0; i < 8; ++i)
     {
         if (pipes[i] >= 0)
             close(pipes[i]);
@@ -71,7 +75,7 @@ static void i_close_pipes(int *pipes)
 
 /*---------------------------------------------------------------------------*/
 
-static bool_t i_pipes(int pipes[6])
+static bool_t i_pipes(int pipes[8])
 {
     pipes[0] = -1;
     pipes[1] = -1;
@@ -79,6 +83,8 @@ static bool_t i_pipes(int pipes[6])
     pipes[3] = -1;
     pipes[4] = -1;
     pipes[5] = -1;
+    pipes[6] = -1;
+    pipes[7] = -1;
 
     if (pipe(pipes) == -1)
     {
@@ -99,6 +105,18 @@ static bool_t i_pipes(int pipes[6])
     }
 
     if (pipe(pipes + 4) == -1)
+    {
+        i_close_pipes(pipes);
+        return FALSE;
+    }
+
+    if (fcntl(pipes[4], F_SETFL, fcntl(pipes[4], F_GETFL) | O_NONBLOCK) < 0)
+    {
+        i_close_pipes(pipes);
+        return FALSE;
+    }
+
+    if (pipe(pipes + 6) == -1)
     {
         i_close_pipes(pipes);
         return FALSE;
@@ -133,6 +151,9 @@ static bool_t i_exec(const char_t *command, int *pipes, pid_t *pid)
         close(pipes[STDERR_WRITE_CHILD]);
         close(pipes[STDERR_READ_PARENT]);
 
+        close(pipes[CLOSE_WRITE]);
+        close(pipes[CLOSE_READ]);
+
         setsid();
         execlp("bash", "bash", "-c", command, NULL);
         cassert_msg(FALSE, "It's a zombie!");
@@ -163,7 +184,7 @@ static bool_t i_exec(const char_t *command, int *pipes, pid_t *pid)
 
 Proc *bproc_exec(const char_t *command, perror_t *error)
 {
-    int pipes[6];
+    int pipes[8];
     pid_t pid;
 
     if (i_pipes(pipes) == FALSE)
@@ -206,6 +227,37 @@ void bproc_close(Proc **proc)
     _osbs_proc_dealloc();
     bmem_free(cast(*proc, byte_t));
     *proc = NULL;
+}
+
+/*---------------------------------------------------------------------------*/
+
+/*
+    Child exits after performing IO against pipes which are buffered and there
+    will be latency of parent doing a read and we wait for the last pipe to be
+    closed indirectly inferring IO completion.
+
+    TODO: there could be a race condition here as the function is designed to
+    be called from different thread where proc could change the value (to NULL).
+*/
+
+void bproc_wait_exit(Proc **proc)
+{
+    /* eventfd is only available on linux and carrying out the signaling with pipes only */
+    struct pollfd fds[1];
+    int ret;
+    cassert_no_null(proc);
+    cassert_no_null(*proc);
+    fds[0].fd = (*proc)->pipes[CLOSE_READ];
+    while (*proc)
+    {
+        ret = poll(fds, 1, -1);
+        if (ret == 1 && (fds[0].revents & POLLHUP || fds[0].revents & POLLNVAL))
+        {
+            fds[0].fd = -1;
+            break;
+        }
+        bthread_sleep(100);
+    }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -336,6 +388,12 @@ bool_t bproc_eread(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsiz
     {
         ptr_assign(rsize, 0);
         ptr_assign(error, ekPOK);
+        return FALSE;
+    }
+    else if (errno == EAGAIN)
+    {
+        ptr_assign(rsize, 0);
+        ptr_assign(error, ekPAGAIN);
         return FALSE;
     }
     else

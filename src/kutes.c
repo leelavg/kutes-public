@@ -1,15 +1,6 @@
+#include "kt.h"
 #include <yyjson.h>
 #include <nappgui.h>
-/*
-Reading a 2.5Mi indented JSON took
-with 4Ki buffer - 35s, peak 4% CPU
-with 16Ki buffer - 10s, peak 5% CPU
-with 32Ki buffer - 4s, peak 6% CPU
-with 64Ki buffer - 2s, peak 7% CPU
-more than 64Ki is increasing overall time with current way of doing I/O
-on my machine (fedora 40)
- */
-#define SIXTY_FOUR_KB (64 * 1024)
 
 /*---------------------------------------------------------------------------*/
 
@@ -18,205 +9,176 @@ const char_t *st_running = "⏳running";     /* U+23f3 */
 const char_t *st_stopping = "⌛stopping";   /* U+231b */
 const char_t *st_stopped = "✕ stopped";     /* U+2715 */
 const char_t *st_completed = "✓ completed"; /* U+2713 */
+const char_t *st_unknown = "? unknown";
 
 const char_t *bt_run = "&run";
 const char_t *bt_stop = "&stop";
 const char_t *bt_wrap = "&wrap";
 const char_t *bt_tail = "&tail";
+const char_t *bt_err_search = "std&err";
 
-/*---------------------------------------------------------------------------*/
-
-typedef enum _run_t
-{
-    ktRUN_UNKNOWN,
-    ktRUN_STARTED,
-    ktRUN_ENDED
-} run_t;
-
-typedef enum _proc_state_t
-{
-    ktPROC_UNKNOWN,
-    ktPROC_CANCEL,
-    ktPROC_COMPLETE
-} proc_state_t;
-
-typedef struct _app_t App;
-struct _app_t
-{
-    byte_t buffer[SIXTY_FOUR_KB];
-    Window *window;
-    Edit *cmdin;
-    run_t run;
-    Button *brun;
-    Button *tail;
-    TextView *cmdout;
-    Proc *proc;
-    proc_state_t proc_state;
-    Mutex *p_mutex;
-    uint32_t rsize;
-    bool_t eread;
-    bool_t stop;
-
-    Edit *search;
-    const char_t *start_ptr;
-    ArrSt(uint32_t) *pos_cache;
-    uint32_t cur_idx;
-    uint32_t end_len;
-    uint32_t pat_len;
-
-    Label *status;
-};
+const char_t *info = "\
+only last 512 KiB of stdout data is displayed here.\n\n\
+checking 'stderr' searches stderr text or 'stdout' by default.\n\n\
+'noshow' suppresses stdout display but still stored for parsing.\n\n\
+if 'nolimit' is checked full stdout is stored for parsing or limited to 4 MiB.\
+";
 
 /*---------------------------------------------------------------------------*/
 
 static uint32_t bg_proc_main(App *app)
 {
-    perror_t err;
-    uint32_t sleep;
-    sleep = 50;
-    while (TRUE)
-    {
-        bmutex_lock(app->p_mutex);
-        if (app->proc_state == ktPROC_CANCEL)
-        {
-            bproc_cancel(app->proc);
-            bproc_close(&app->proc);
-            bmutex_unlock(app->p_mutex);
-            return 1;
-        }
-        else if (app->rsize)
-        {
-            bmutex_unlock(app->p_mutex);
-            if (err == ekPAGAIN)
-                sleep = 500;
-            bthread_sleep(sleep);
-            continue;
-        }
-        else if (app->proc_state == ktPROC_COMPLETE)
-        {
-            bproc_close(&app->proc);
-            bmutex_unlock(app->p_mutex);
-            return 0;
-        }
-        else if (!(bproc_finish(app->proc, NULL) && app->eread) &&
-                 ((bproc_read(app->proc, app->buffer, SIXTY_FOUR_KB - 1, &app->rsize, &err) || err == ekPAGAIN)))
-        {
-            app->buffer[app->rsize] = '\0';
-        }
-        else if (bproc_eread(app->proc, app->buffer, SIXTY_FOUR_KB - 1, &app->rsize, NULL))
-        {
-            /* TODO: require non blocking stderr? */
-            app->buffer[app->rsize] = '\0';
-            app->eread = TRUE;
-        }
-        else
-        {
-            app->proc_state = ktPROC_COMPLETE;
-        }
-        bmutex_unlock(app->p_mutex);
-    }
+    bproc_wait_exit(&app->proc);
+    return 0;
 }
 
 /*---------------------------------------------------------------------------*/
 
 static void i_run_update(App *app)
 {
-    bmutex_lock(app->p_mutex);
-    if (app->stop)
-        app->proc_state = ktPROC_CANCEL;
-    if (app->rsize == 0)
+    perror_t out, err;
+    bool_t read0 = TRUE;
+    if (app->run_state != ktRUN_INPROGRESS)
     {
-        bmutex_unlock(app->p_mutex);
         return;
     }
-    else if (app->proc_state == ktPROC_COMPLETE)
+    else if (app->stop)
     {
-        app->rsize = 0;
-        bmutex_unlock(app->p_mutex);
+        bproc_cancel(app->proc);
+        bproc_close(&app->proc);
+        app->run_state = ktRUN_CANCEL;
         return;
     }
-    else if (app->eread)
+
+    if (bproc_read(app->proc, app->read_buf, READ_BUFFER - 1, &app->rsize, &out))
     {
-        textview_color(app->cmdout, kCOLOR_RED);
+        if (app->nolimit && app->out_len + app->rsize > app->parse_size)
+        {
+            /* TODO: what if this fails and old pointer is lost?, in assert mode this throws a fatal error */
+            app->parse_buf = heap_realloc_n(app->parse_buf, app->parse_size, app->parse_size + INCR_PARSE_SIZE, byte_t);
+            app->parse_size += INCR_PARSE_SIZE;
+        }
+
+        if (app->nolimit || app->out_len < INITIAL_PARSE_SIZE)
+            bmem_copy(app->parse_buf + (app->out_len * sizeof(char_t)), app->read_buf, app->rsize);
+
+        app->read_buf[app->rsize] = '\0';
+        app->out_len += app->rsize;
+        if (button_get_state(app->noshow) == ekGUI_OFF)
+        {
+            if (app->out_len > MAX_OUT_SIZE)
+            {
+                textview_select(app->cmdout, 0, app->rsize);
+                textview_del_sel(app->cmdout);
+                textview_select(app->cmdout, -1, -1);
+            }
+            textview_writef(app->cmdout, cast(app->read_buf, char_t));
+        }
+        read0 = FALSE;
     }
-    textview_writef(app->cmdout, cast(app->buffer, char_t));
+
+    if (bproc_eread(app->proc, app->read_buf, READ_BUFFER - 1, &app->rsize, &err))
+    {
+        app->read_buf[app->rsize] = '\0';
+        app->err_len += app->rsize;
+        if (app->err_len > MAX_ERR_SIZE)
+        {
+            textview_select(app->cmderr, 0, app->rsize);
+            textview_del_sel(app->cmderr);
+            textview_select(app->cmderr, -1, -1);
+        }
+        textview_writef(app->cmderr, cast(app->read_buf, char_t));
+        read0 = FALSE;
+    }
+
     if (button_get_state(app->tail) == ekGUI_ON)
+    {
         textview_scroll_caret(app->cmdout);
-    app->rsize = 0;
-    bmutex_unlock(app->p_mutex);
+        textview_scroll_caret(app->cmderr);
+    }
+
+    if (read0 && out != ekPAGAIN && err != ekPAGAIN)
+    {
+        bproc_close(&app->proc);
+        app->run_state = ktRUN_COMPLETE;
+    }
 }
 
 /*---------------------------------------------------------------------------*/
 
 static void i_run_end(App *app, const uint32_t rval)
 {
+    /* reset state */
     edit_editable(app->cmdin, TRUE);
-    app->run = ktRUN_ENDED;
-    button_text(app->brun, bt_run);
+    cell_enabled(app->nolimitb, TRUE);
+    button_text(app->run, bt_run);
     app->stop = FALSE;
-    if (rval == 0)
+    if (app->run_state == ktRUN_COMPLETE)
     {
         label_text(app->status, st_completed);
+        app->run_state = ktRUN_ENDED;
+        /* 119 is empty resource list */
+        if (app->out_len > 119 && (app->nolimit || app->out_len < INITIAL_PARSE_SIZE))
+            /* TODO: do not supply "app" only send a pointer for registering closures */
+            populate_listbox(app, app->vscroll, cast(app->parse_buf, char_t), app->out_len);
+    }
+    else if (app->run_state == ktRUN_CANCEL)
+    {
+        label_text(app->status, st_stopped);
+        app->run_state = ktRUN_ENDED;
     }
     else
     {
-        label_text(app->status, st_stopped);
+        label_text(app->status, st_unknown);
     }
+    unref(rval);
 }
 
 /*---------------------------------------------------------------------------*/
 
 static void i_OnRun(App *app, Event *e)
 {
-    if (app->run != ktRUN_STARTED)
+    if (app->run_state == ktRUN_ENDED)
     {
         const char_t *cmdin;
+        uint32_t current, total = popup_count(app->vselect);
         cmdin = edit_get_text(app->cmdin);
 
         label_text(app->status, st_ready);
         app->start_ptr = NULL;
         app->pat_len = 0;
+        app->out_len = 0;
+        app->err_len = 0;
         edit_text(app->search, "");
         textview_clear(app->cmdout);
-        textview_color(app->cmdout, kCOLOR_DEFAULT);
+        textview_clear(app->cmderr);
 
-        if (cmdin && !cmdin[0])
+        popup_selected(app->vselect, 0);
+        layout_show_row(app->vscroll, 0, TRUE);
+        layout_update(app->vscroll);
+        for (current = 1; current < total; current++)
         {
-            return;
-        }
-
-        if (str_equ_c(cmdin, "k"))
-        {
-            String *path = hfile_home_dir("oss/kutes/.cache/out-large.json");
-            yyjson_doc *doc = yyjson_read_file(tcc(path), 0, NULL, NULL);
-            if (doc)
+            /* TODO: we can reuse the layout rather than adding & removing continuosuly
+            as it allocates and deallocates memory considerably */
+            popup_del_elem(app->vselect, current);
+            layout_remove_row(app->vscroll, 1);
+            if (app->cls)
             {
-                yyjson_val *root = yyjson_doc_get_root(doc);
-                yyjson_val *items = yyjson_obj_get(root, "items");
-                size_t idx, max;
-                yyjson_val *item;
-                yyjson_arr_foreach(items, idx, max, item)
-                {
-                    yyjson_val *name = yyjson_ptr_get(item, "/metadata/name");
-                    textview_writef(app->cmdout, yyjson_get_str(name));
-                    textview_writef(app->cmdout, "\n");
-                }
+                app->cls->func_closure(app->cls);
+                heap_delete(&app->cls, Closure);
             }
-            yyjson_doc_free(doc);
-            str_destroy(&path);
-            i_run_end(app, 0);
         }
-        else
+        layout_update(app->vscroll);
+
+        if (cmdin && cmdin[0])
         {
-            app->run = ktRUN_STARTED;
-            edit_editable(app->cmdin, FALSE);
-            app->proc_state = ktPROC_UNKNOWN;
-            app->eread = FALSE;
             app->proc = bproc_exec(cmdin, NULL);
+            app->run_state = ktRUN_INPROGRESS;
+            edit_editable(app->cmdin, FALSE);
+            cell_enabled(app->nolimitb, FALSE);
             label_text(app->status, st_running);
             bproc_write_close(app->proc);
-            button_text(app->brun, bt_stop);
-            app->stop = FALSE;
+            button_text(app->run, bt_stop);
             osapp_task(app, 0., bg_proc_main, i_run_update, i_run_end, App);
         }
     }
@@ -233,13 +195,32 @@ static void i_OnRun(App *app, Event *e)
 static void i_OnWrap(App *app, Event *e)
 {
     const EvButton *p;
-    if (app->proc_state == ktPROC_UNKNOWN)
+    if (app->run_state != ktRUN_ENDED)
     {
-        unref(e);
         return;
     }
     p = event_params(e, EvButton);
     textview_wrap(app->cmdout, p->state == ekGUI_ON ? TRUE : FALSE);
+    textview_wrap(app->cmderr, p->state == ekGUI_ON ? TRUE : FALSE);
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_ResetSearch(App *app, Event *e)
+{
+    app->start_ptr = NULL;
+    arrst_clear(app->pos_cache, NULL, uint32_t);
+    textview_select(app->cmdout, -1, -1);
+    textview_select(app->cmderr, -1, -1);
+    unref(e);
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_NoSizeLimit(App *app, Event *e)
+{
+    const EvButton *p = event_params(e, EvButton);
+    app->nolimit = p->state == ekGUI_ON ? TRUE : FALSE;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -247,8 +228,13 @@ static void i_OnWrap(App *app, Event *e)
 static void i_OnSearchUpDown(App *app, Event *e)
 {
     const EvButton *p;
+    TextView *tview;
     if (!app->start_ptr)
         return;
+
+    tview = button_get_state(app->err_search) == ekGUI_ON
+                ? app->cmderr
+                : app->cmdout;
 
     p = event_params(e, EvButton);
     if (p->index == 0)
@@ -266,12 +252,12 @@ static void i_OnSearchUpDown(App *app, Event *e)
             app->cur_idx = 0;
     }
 
-    if (arrst_uint32_t_size(app->pos_cache) > app->cur_idx)
+    if (arrst_size(app->pos_cache, uint32_t) > app->cur_idx)
     {
         /* getting from cache */
-        int32_t start = *arrst_uint32_t_get(app->pos_cache, app->cur_idx);
-        textview_select(app->cmdout, start, start + app->pat_len);
-        textview_scroll_caret(app->cmdout);
+        int32_t start = *arrst_get_const(app->pos_cache, app->cur_idx, uint32_t);
+        textview_select(tview, start, start + app->pat_len);
+        textview_scroll_caret(tview);
     }
     else
     {
@@ -281,12 +267,12 @@ static void i_OnSearchUpDown(App *app, Event *e)
             int32_t start;
             uint32_t offset = next - app->start_ptr;
 
-            int32_t prev = *arrst_uint32_t_get(app->pos_cache, app->cur_idx - 1);
+            int32_t prev = *arrst_get_const(app->pos_cache, app->cur_idx - 1, uint32_t);
             arrst_append(app->pos_cache, prev + app->pat_len + offset, uint32_t);
 
             start = prev + app->pat_len + offset;
-            textview_select(app->cmdout, start, start + app->pat_len);
-            textview_scroll_caret(app->cmdout);
+            textview_select(tview, start, start + app->pat_len);
+            textview_scroll_caret(tview);
 
             app->start_ptr = next + (sizeof(char_t) * app->pat_len);
         }
@@ -297,9 +283,9 @@ static void i_OnSearchUpDown(App *app, Event *e)
             app->cur_idx = 0;
 
             /* getting from cache */
-            start = *arrst_uint32_t_get(app->pos_cache, app->cur_idx);
-            textview_select(app->cmdout, start, start + app->pat_len);
-            textview_scroll_caret(app->cmdout);
+            start = *arrst_get_const(app->pos_cache, app->cur_idx, uint32_t);
+            textview_select(tview, start, start + app->pat_len);
+            textview_scroll_caret(tview);
         }
     }
 }
@@ -317,33 +303,38 @@ static void i_focus_search(App *app, Event *e)
 static void i_OnSearchFilter(App *app, Event *e)
 {
     const EvText *p = event_params(e, EvText);
-    if (app->run != ktRUN_ENDED)
+    TextView *tview;
+    if (app->run_state != ktRUN_ENDED)
         return;
+
+    tview = button_get_state(app->err_search) == ekGUI_ON
+                ? app->cmderr
+                : app->cmdout;
 
     app->pat_len += p->len;
     if (app->pat_len == 0)
     {
         /* reset starter and cache */
         app->start_ptr = NULL;
-        arrst_uint32_t_clear(app->pos_cache, NULL);
-        textview_select(app->cmdout, -1, -1);
+        arrst_clear(app->pos_cache, NULL, uint32_t);
+        textview_select(tview, -1, -1);
     }
     else
     {
         char *first;
         /* TODO: possible to replace with Boyer–Moore or Efficient BNDM? */
-        app->start_ptr = textview_get_text(app->cmdout);
+        app->start_ptr = textview_get_text(tview);
         first = blib_strstr(app->start_ptr, p->text);
         if (first)
         {
             uint32_t offset = first - app->start_ptr;
 
-            arrst_uint32_t_clear(app->pos_cache, NULL);
+            arrst_clear(app->pos_cache, NULL, uint32_t);
             arrst_append(app->pos_cache, offset, uint32_t);
             app->cur_idx = 0;
 
-            textview_select(app->cmdout, offset, offset + app->pat_len);
-            textview_scroll_caret(app->cmdout);
+            textview_select(tview, offset, offset + app->pat_len);
+            textview_scroll_caret(tview);
 
             app->start_ptr = first + (sizeof(char_t) * app->pat_len);
         }
@@ -351,9 +342,42 @@ static void i_OnSearchFilter(App *app, Event *e)
         {
             /* reset starter and cache */
             app->start_ptr = NULL;
-            arrst_uint32_t_clear(app->pos_cache, NULL);
-            textview_select(app->cmdout, -1, -1);
+            arrst_clear(app->pos_cache, NULL, uint32_t);
+            textview_select(tview, -1, -1);
         }
+    }
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_OnSearchFocus(App *app, Event *e)
+{
+    const bool_t *p = event_params(e, bool_t);
+    if (*p)
+    {
+        EvText params;
+        params.text = edit_get_text(app->search);
+        params.cpos = blib_strlen(params.text);
+        params.len = 0;
+        if (params.cpos)
+        {
+            Listener *func = listener(app, i_OnSearchFilter, App);
+            listener_event(func, ekGUI_TYPE_EDITBOX, NULL, &params, NULL, void, EvText, void);
+            listener_destroy(&func);
+        }
+    }
+    unref(app);
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_OnPopupSelect(App *app, Event *e)
+{
+    const EvButton *p = event_params(e, EvButton);
+    if (p->index != UINT32_MAX)
+    {
+        adjust_vscroll(app->vscroll, p->index, popup_count(app->vselect));
+        window_update(app->window);
     }
 }
 
@@ -362,61 +386,145 @@ static void i_OnSearchFilter(App *app, Event *e)
 static Panel *i_panel(App *app)
 {
     Panel *panel = panel_create();
-    Layout *main = layout_create(1, 4);
+
+    Layout *main = layout_create(1, 3);
+    Layout *input = layout_create(1, 2);
+    Layout *inops = layout_create(2, 1);
+    Layout *vscroll = layout_create(1, 1);
+
+    Font *font = font_monospace(font_regular_size(), ekFNORMAL);
     Edit *cmdin = edit_multiline();
-    Layout *ops = layout_create(5, 1);
     Button *run = button_push();
+    PopUp *vselect = popup_create();
+
+    Layout *result = layout_create(1, 2);
+    Layout *ops = layout_create(7, 1);
     Button *wrap = button_check();
     Button *tail = button_check();
     Edit *search = edit_create();
+    Button *err_search = button_check();
+    Button *noshow = button_check();
+    Button *nolimitb = button_check();
     UpDown *searchUpdown = updown_create();
+    SplitView *hsplit = splitview_horizontal();
     TextView *cmdout = textview_create();
-    Label *status = label_multiline();
+    TextView *cmderr = textview_create();
 
-    layout_edit(main, cmdin, 0, 0);
-    layout_hsize(main, 0, 950);
-    layout_vsize(main, 0, 50);
+    Label *status = label_create();
+
+    panel_size(panel, s2df(960, 900));
+    layout_vsize(input, 0, 50);
+    layout_vsize(input, 1, 25);
+    layout_vsize(vscroll, 0, 775);
+    layout_vsize(main, 2, 50);
+    layout_margin4(main, 5, 5, 0, 5);
+
+    /* edit_phstyle(cmdin, ekFITALIC);
+    edit_phtext(cmdin, "... on your command ..."); */
+    edit_font(cmdin, font);
+    font_destroy(&font);
+    layout_edit(input, cmdin, 0, 0);
 
     button_text(run, bt_run);
     button_OnClick(run, listener(app, i_OnRun, App));
-    layout_button(ops, run, 0, 0);
+
+    layout_button(inops, run, 0, 0);
+
+    popup_add_elem(vselect, "result", NULL);
+    popup_OnSelect(vselect, listener(app, i_OnPopupSelect, App));
+
+    layout_popup(inops, vselect, 1, 0);
+
+    layout_hsize(inops, 0, 960. / 2 - 5);
+    layout_hsize(inops, 1, 960. / 2 - 5);
+    layout_layout(input, inops, 0, 1);
+
+    layout_layout(main, input, 0, 0);
 
     button_text(wrap, bt_wrap);
     button_OnClick(wrap, listener(app, i_OnWrap, App));
     button_state(wrap, ekGUI_OFF);
-    layout_button(ops, wrap, 1, 0);
+
+    layout_button(ops, wrap, 0, 0);
 
     button_text(tail, bt_tail);
     button_state(tail, ekGUI_OFF);
-    layout_button(ops, tail, 2, 0);
+
+    layout_button(ops, tail, 1, 0);
 
     edit_phstyle(search, ekFITALIC);
     edit_phtext(search, "search...");
     edit_OnFilter(search, listener(app, i_OnSearchFilter, App));
-    layout_edit(ops, search, 3, 0);
-    layout_hexpand(ops, 3);
+    edit_OnFocus(search, listener(app, i_OnSearchFocus, App));
+
+    layout_edit(ops, search, 2, 0);
+    layout_hexpand(ops, 2);
 
     updown_OnClick(searchUpdown, listener(app, i_OnSearchUpDown, App));
-    layout_updown(ops, searchUpdown, 4, 0);
-    layout_layout(main, ops, 0, 1);
 
-    textview_size(cmdout, s2df(0, 750));
+    layout_updown(ops, searchUpdown, 3, 0);
+
+    button_text(err_search, bt_err_search);
+    button_OnClick(err_search, listener(app, i_ResetSearch, App));
+    button_state(err_search, ekGUI_OFF);
+
+    layout_button(ops, err_search, 4, 0);
+
+    button_text(noshow, "noshow");
+    button_state(noshow, ekGUI_OFF);
+
+    layout_button(ops, noshow, 5, 0);
+
+    button_text(nolimitb, "nolimit");
+    button_OnClick(nolimitb, listener(app, i_NoSizeLimit, App));
+    button_state(nolimitb, ekGUI_OFF);
+
+    layout_button(ops, nolimitb, 6, 0);
+
+    layout_layout(result, ops, 0, 0);
+
     textview_show_select(cmdout, TRUE);
     textview_wrap(cmdout, FALSE);
-    layout_textview(main, cmdout, 0, 2);
+    textview_fstyle(cmdout, ekFITALIC);
+    textview_writef(cmdout, info);
+    textview_fstyle(cmdout, ekFNORMAL);
+    splitview_text(hsplit, cmdout, FALSE);
+
+    textview_color(cmderr, kCOLOR_RED);
+    textview_show_select(cmderr, TRUE);
+    textview_wrap(cmderr, FALSE);
+    textview_fstyle(cmderr, ekFITALIC);
+    textview_writef(cmderr, "only last 256 KiB of stderr data is displayed here.");
+    textview_fstyle(cmderr, ekFNORMAL);
+    splitview_text(hsplit, cmderr, FALSE);
+
+    splitview_pos(hsplit, .67f);
+
+    layout_splitview(result, hsplit, 0, 1);
+
+    layout_vexpand(result, 1);
+    layout_layout(vscroll, result, 0, 0);
+    layout_layout(main, vscroll, 0, 1);
+    layout_vexpand(main, 1);
 
     label_text(status, st_ready);
-    layout_halign(main, 0, 3, ekJUSTIFY);
-    layout_label(main, status, 0, 3);
 
-    layout_margin(main, 5);
+    layout_halign(main, 0, 2, ekJUSTIFY);
+    layout_label(main, status, 0, 2);
+
     panel_layout(panel, main);
 
     app->cmdin = cmdin;
-    app->brun = run;
+    app->run = run;
+    app->vselect = vselect;
+    app->vscroll = vscroll;
     app->tail = tail;
     app->search = search;
+    app->err_search = err_search;
+    app->noshow = noshow;
+    app->nolimitb = layout_cell(ops, 6, 0);
     app->cmdout = cmdout;
+    app->cmderr = cmderr;
     app->status = status;
 
     return panel;
@@ -426,8 +534,12 @@ static Panel *i_panel(App *app)
 
 static void i_OnClose(App *app, Event *e)
 {
+    if (app->proc)
+    {
+        bproc_cancel(app->proc);
+        bproc_close(&app->proc);
+    }
     osapp_finish();
-    unref(app);
     unref(e);
 }
 
@@ -440,9 +552,13 @@ static App *i_create(void)
     draw2d_preferred_monospace("Noto Sans Mono");
     panel = i_panel(app);
     app->window = window_create(ekWINDOW_STD);
-
     app->pos_cache = arrst_create(uint32_t);
-    app->p_mutex = bmutex_create();
+    app->run_state = ktRUN_ENDED;
+    app->alc = alc_init("yyjson");
+    app->parse_size = INITIAL_PARSE_SIZE + READ_BUFFER;
+    app->parse_buf = heap_new_n(app->parse_size, byte_t);
+    app->nolimit = FALSE;
+    cols_bind();
 
     window_panel(app->window, panel);
     window_title(app->window, "kutes");
@@ -456,10 +572,16 @@ static App *i_create(void)
 
 static void i_destroy(App **app)
 {
-    arrst_uint32_t_destroy(&(*app)->pos_cache, NULL);
-    bmutex_close(&(*app)->p_mutex);
+    if ((*app)->cls != NULL)
+    {
+        (*app)->cls->func_closure((*app)->cls);
+        heap_delete(&(*app)->cls, Closure);
+    }
+    arrst_destroy(&(*app)->pos_cache, NULL, uint32_t);
 
+    heap_delete_n(&(*app)->parse_buf, (*app)->parse_size, byte_t);
     window_destroy(&(*app)->window);
+    alc_dest(&(*app)->alc);
     heap_delete(app, App);
 }
 

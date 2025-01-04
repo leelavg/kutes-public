@@ -492,6 +492,10 @@ void ostext_property(OSText *view, const gui_text_t prop, const void *value)
         break;
     }
 
+    case ekGUI_TEXT_DELETE:
+        SendMessage(view->control.hwnd, EM_REPLACESEL, 0, (LPARAM)NULL);
+        break;
+
         cassert_default();
     }
 }

@@ -760,6 +760,20 @@ void ostext_property(OSText *view, const gui_text_t param, const void *value)
         i_apply_sel(lview);
         break;
 
+    /* untested */
+    case ekGUI_TEXT_DELETE:
+        if (lview->is_editable == YES)
+        {
+            [[lview textStorage] replaceCharactersInRange:[lview selectedRange] withString:nil];
+        }
+        else
+        {
+            [lview setEditable:YES];
+            [[lview textStorage] replaceCharactersInRange:[lview selectedRange] withString:nil];
+            [lview setEditable:NO];
+        }
+        break;
+
         cassert_default();
     }
 }

@@ -161,6 +161,19 @@ void popup_set_elem(PopUp *popup, const uint32_t index, const char_t *text, cons
 
 /*---------------------------------------------------------------------------*/
 
+void popup_del_elem(PopUp *popup, const uint32_t index)
+{
+    cassert_no_null(popup);
+    cassert_no_null(popup->component.context);
+    cassert_no_nullf(popup->component.context->func_popup_set_elem);
+    cassert(index < arrst_size(popup->elems, PElem));
+    arrst_delete(popup->elems, index, i_remove_elem, PElem);
+    popup->component.context->func_popup_set_elem(popup->component.ositem, ekCTRL_OP_DEL, index, NULL, NULL);
+    popup->component.context->func_popup_list_height(popup->component.ositem, arrst_size(popup->elems, PElem));
+}
+
+/*---------------------------------------------------------------------------*/
+
 void popup_clear(PopUp *popup)
 {
     uint32_t i, n;

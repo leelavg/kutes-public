@@ -1,0 +1,260 @@
+Extra function to wait until all the pipes are closed.
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/src/osbs/bproc.h b/src/osbs/bproc.h
+index 42a96cd..41a3668 100644
+--- a/src/osbs/bproc.h
++++ b/src/osbs/bproc.h
+@@ -25,6 +25,8 @@ _osbs_api uint32_t bproc_wait(Proc *proc);
+ 
+ _osbs_api bool_t bproc_finish(Proc *proc, uint32_t *code);
+ 
++_osbs_api void bproc_wait_exit(Proc **proc);
++
+ _osbs_api bool_t bproc_read(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsize, perror_t *error);
+ 
+ _osbs_api bool_t bproc_eread(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsize, perror_t *error);
+diff --git a/src/osbs/unix/bproc.c b/src/osbs/unix/bproc.c
+index 0441242..cb88954 100644
+--- a/src/osbs/unix/bproc.c
++++ b/src/osbs/unix/bproc.c
+@@ -11,6 +11,7 @@
+ /* Processes */
+ 
+ #include "bproc.h"
++#include "bthread.h"
+ #include "osbs.inl"
+ #include <sewer/bmem.h>
+ #include <sewer/cassert.h>
+@@ -23,6 +24,7 @@
+ #include <unistd.h>
+ #include <sys/types.h>
+ #include <sys/wait.h>
++#include <sys/poll.h>
+ #include <signal.h>
+ #include <stdlib.h>
+ #include <errno.h>
+@@ -34,6 +36,8 @@
+ #define STDOUT_WRITE_CHILD 3
+ #define STDERR_READ_PARENT 4
+ #define STDERR_WRITE_CHILD 5
++#define CLOSE_WRITE 6
++#define CLOSE_READ 7
+ 
+ #if defined __LINUX__
+ int kill(pid_t pid, int sig);
+@@ -41,7 +45,7 @@ int kill(pid_t pid, int sig);
+ 
+ struct _process_t
+ {
+-    int pipes[6];
++    int pipes[8];
+     pid_t pid;
+ };
+ 
+@@ -51,7 +55,7 @@ static Proc *i_create(int *pipes, pid_t pid)
+ {
+     Proc *proc = cast(bmem_malloc(sizeof(Proc)), Proc);
+     _osbs_proc_alloc();
+-    bmem_copy_n(proc->pipes, pipes, 6, int);
++    bmem_copy_n(proc->pipes, pipes, 8, int);
+     proc->pid = pid;
+     return proc;
+ }
+@@ -62,7 +66,7 @@ static void i_close_pipes(int *pipes)
+ {
+     uint32_t i;
+     cassert_no_null(pipes);
+-    for (i = 0; i < 6; ++i)
++    for (i = 0; i < 8; ++i)
+     {
+         if (pipes[i] >= 0)
+             close(pipes[i]);
+@@ -71,7 +75,7 @@ static void i_close_pipes(int *pipes)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
+-static bool_t i_pipes(int pipes[6])
++static bool_t i_pipes(int pipes[8])
+ {
+     pipes[0] = -1;
+     pipes[1] = -1;
+@@ -79,6 +83,8 @@ static bool_t i_pipes(int pipes[6])
+     pipes[3] = -1;
+     pipes[4] = -1;
+     pipes[5] = -1;
++    pipes[6] = -1;
++    pipes[7] = -1;
+ 
+     if (pipe(pipes) == -1)
+     {
+@@ -104,6 +110,12 @@ static bool_t i_pipes(int pipes[6])
+         return FALSE;
+     }
+ 
++    if (pipe(pipes + 6) == -1)
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     return TRUE;
+ }
+ 
+@@ -133,6 +145,9 @@ static bool_t i_exec(const char_t *command, int *pipes, pid_t *pid)
+         close(pipes[STDERR_WRITE_CHILD]);
+         close(pipes[STDERR_READ_PARENT]);
+ 
++        close(pipes[CLOSE_WRITE]);
++        close(pipes[CLOSE_READ]);
++
+         setsid();
+         execlp("bash", "bash", "-c", command, NULL);
+         cassert_msg(FALSE, "It's a zombie!");
+@@ -163,7 +178,7 @@ static bool_t i_exec(const char_t *command, int *pipes, pid_t *pid)
+ 
+ Proc *bproc_exec(const char_t *command, perror_t *error)
+ {
+-    int pipes[6];
++    int pipes[8];
+     pid_t pid;
+ 
+     if (i_pipes(pipes) == FALSE)
+@@ -210,6 +225,37 @@ void bproc_close(Proc **proc)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++/*
++    Child exits after performing IO against pipes which are buffered and there
++    will be latency of parent doing a read and we wait for the last pipe to be
++    closed indirectly inferring IO completion.
++
++    TODO: there could be a race condition here as the function is designed to
++    be called from different thread where proc could change the value (to NULL).
++*/
++
++void bproc_wait_exit(Proc **proc)
++{
++    /* eventfd is only available on linux and carrying out the signaling with pipes only */
++    struct pollfd fds[1];
++    int ret;
++    cassert_no_null(proc);
++    cassert_no_null(*proc);
++    fds[0].fd = (*proc)->pipes[CLOSE_READ];
++    while (*proc)
++    {
++        ret = poll(fds, 1, -1);
++        if (ret == 1 && (fds[0].revents & POLLHUP || fds[0].revents & POLLNVAL))
++        {
++            fds[0].fd = -1;
++            break;
++        }
++        bthread_sleep(100);
++    }
++}
++
++/*---------------------------------------------------------------------------*/
++
+ bool_t bproc_cancel(Proc *proc)
+ {
+     cassert_no_null(proc);
+diff --git a/src/osbs/win/bproc.c b/src/osbs/win/bproc.c
+index 736bc26..decbdf0 100644
+--- a/src/osbs/win/bproc.c
++++ b/src/osbs/win/bproc.c
+@@ -12,6 +12,7 @@
+ 
+ #include "osbs.inl"
+ #include "bproc.h"
++#include "bthread.h"
+ #include <sewer/bmem.h>
+ #include <sewer/cassert.h>
+ #include <sewer/ptr.h>
+@@ -31,10 +32,12 @@
+ #define STDOUT_WRITE_CHILD 3
+ #define STDERR_READ_PARENT 4
+ #define STDERR_WRITE_CHILD 5
++#define CLOSE_WRITE 6
++#define CLOSE_READ 7
+ 
+ struct _process_t
+ {
+-    HANDLE pipes[6];
++    HANDLE pipes[8];
+     PROCESS_INFORMATION info;
+ };
+ 
+@@ -44,7 +47,7 @@ static Proc *i_create(HANDLE *pipes, PROCESS_INFORMATION *info)
+ {
+     Proc *proc = cast(bmem_malloc(sizeof(Proc)), Proc);
+     _osbs_proc_alloc();
+-    bmem_copy_n(proc->pipes, pipes, 6, HANDLE);
++    bmem_copy_n(proc->pipes, pipes, 8, HANDLE);
+     proc->info = *info;
+     return proc;
+ }
+@@ -55,7 +58,7 @@ static void i_close_pipes(HANDLE *pipes)
+ {
+     uint32_t i;
+     cassert_no_null(pipes);
+-    for (i = 0; i < 6; ++i)
++    for (i = 0; i < 8; ++i)
+     {
+         if (pipes[i] != NULL)
+             CloseHandle(pipes[i]);
+@@ -71,7 +74,7 @@ static bool_t i_pipes(HANDLE *pipes)
+     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+     saAttr.bInheritHandle = TRUE;
+     saAttr.lpSecurityDescriptor = NULL;
+-    bmem_zero_n(pipes, 6, HANDLE);
++    bmem_zero_n(pipes, 8, HANDLE);
+ 
+     if (!CreatePipe(&pipes[STDIN_READ_CHILD], &pipes[STDIN_WRITE_PARENT], &saAttr, 0))
+     {
+@@ -116,6 +119,12 @@ static bool_t i_pipes(HANDLE *pipes)
+         return FALSE;
+     }
+ 
++    if (!CreatePipe(&pipes[CLOSE_READ], &pipes[CLOSE_WRITE], NULL, 0))
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     return TRUE;
+ }
+ 
+@@ -161,7 +170,7 @@ static bool_t i_exec(const char_t *command, HANDLE *pipes, PROCESS_INFORMATION *
+ 
+ Proc *bproc_exec(const char_t *command, perror_t *error)
+ {
+-    HANDLE pipes[6];
++    HANDLE pipes[8];
+     PROCESS_INFORMATION info;
+ 
+     if (i_pipes(pipes) == FALSE)
+@@ -199,6 +208,23 @@ void bproc_close(Proc **proc)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void bproc_wait_exit(Proc **proc)
++{
++    cassert_no_null(proc);
++    cassert_no_null(*proc);
++    cassert_no_null((*proc)->info.hProcess);
++    cassert_no_null((*proc)->info.hThread);
++    while (*proc)
++    {
++        BOOL ok = ReadFile((*proc)->pipes[CLOSE_READ], NULL, 0, NULL, NULL);
++        if (!ok && GetLastError() == ERROR_BROKEN_PIPE)
++            break;
++        bthread_sleep(100);
++    }
++}
++
++/*---------------------------------------------------------------------------*/
++
+ bool_t bproc_cancel(Proc *proc)
+ {
+     cassert_no_null(proc);

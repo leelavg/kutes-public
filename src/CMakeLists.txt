@@ -1,1 +1,3 @@
-nap_desktop_app(kutes "osapp;yyjson" NRC_NONE)
+# to set NAP_TARGET_SRC_EXTENSION
+include(${NAPPGUI_ROOT_PATH}/prj/NAppTarget.cmake)
+nap_desktop_app(kutes "osapp;yyjson;inet" NRC_NONE)

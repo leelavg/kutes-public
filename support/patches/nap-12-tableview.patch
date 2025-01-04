@@ -1,0 +1,187 @@
+Remove column during runtime, reduce redundant view_update and lock
+redraw to 12 fps.
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/src/gui/tableview.c b/src/gui/tableview.c
+index ded7301..690b921 100644
+--- a/src/gui/tableview.c
++++ b/src/gui/tableview.c
+@@ -26,6 +26,7 @@
+ #include <geom2d/s2d.h>
+ #include <core/arrst.h>
+ #include <core/arrpt.h>
++#include <core/clock.h>
+ #include <core/event.h>
+ #include <core/heap.h>
+ #include <core/strings.h>
+@@ -93,12 +94,15 @@ struct _tdata_t
+     bool_t vlines;
+     bool_t recompute_width;
+     bool_t recompute_height;
++    bool_t redraw_header;
++    bool_t draw_overlay;
+     uint32_t hkey_scroll;
+     Listener *OnData;
+     Listener *OnSelect;
+     Listener *OnRowClick;
+     Listener *OnHeaderClick;
+     Window *window;
++    Clock *clock;
+ };
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -137,6 +141,9 @@ static TData *i_create_data(View *view)
+     data->hkey_scroll = i_HORIZONTAL_KEY_SCROLL;
+     data->multisel_mode = ekCTRL_MSEL_NO;
+     data->cursor = ekGUI_CURSOR_ARROW;
++    /* .08 s == 80 ms ~= 12 fps */
++    data->clock = clock_create(.08);
++    clock_frame(data->clock, NULL, NULL);
+     return data;
+ }
+ 
+@@ -163,6 +170,7 @@ static void i_destroy_data(TData **data)
+     listener_destroy(&(*data)->OnHeaderClick);
+     arrst_destroy(&(*data)->columns, i_remove_column, Column);
+     arrst_destroy(&(*data)->selected, NULL, uint32_t);
++    clock_destroy(&(*data)->clock);
+     heap_delete(data, TData);
+ }
+ 
+@@ -323,6 +331,18 @@ static void i_OnDraw(TableView *view, Event *e)
+     uint32_t nc = 0, nr = 0;
+     cassert_no_null(data);
+ 
++    /*
++        TODO: even after a lengthy debugging not able to figure out why gtk
++        triggers redraw when the cursor is on scrollbars (h/v), so brigning down
++        the frame rate and also stopped redraw on various events by going over
++        each one of them.
++    */
++    if (!clock_frame(data->clock, NULL, NULL))
++    {
++        data->draw_overlay = FALSE;
++        return;
++    }
++    data->draw_overlay = TRUE;
+     freeze_width = i_freezed_width(data->columns, data->freeze_col_id);
+     nc = arrst_size(data->columns, Column);
+     nr = data->num_rows;
+@@ -595,11 +615,15 @@ static void i_draw_header(DCtx *ctx, const TData *data, const Column *col, const
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++static void i_head_height(TData *data);
+ static void i_OnOverlay(TableView *view, Event *e)
+ {
+     TData *data = view_get_data(cast(view, View), TData);
+     cassert_no_null(data);
+ 
++    if (!data->draw_overlay)
++        return;
++
+     if (data->head_visible == TRUE)
+     {
+         const EvDraw *p = event_params(e, EvDraw);
+@@ -613,6 +637,13 @@ static void i_OnOverlay(TableView *view, Event *e)
+         int32_t lx;
+         uint32_t i;
+ 
++        if (data->redraw_header)
++        {
++            drawctrl_clear(p->ctx, (int32_t)p->x, (int32_t)p->y, (uint32_t)p->width, data->head_height);
++            i_head_height(data);
++            data->redraw_header = FALSE;
++        }
++
+         {
+             V2Df pos;
+             view_viewport(cast(view, View), &pos, NULL);
+@@ -1011,7 +1042,10 @@ static void i_OnMove(TableView *view, Event *e)
+         }
+     }
+ 
+-    view_update(cast(view, View));
++    /*
++        TODO: changing cursor doesn't need view update
++        view_update(cast(view, View));
++    */
+ }
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -1036,6 +1070,7 @@ static void i_OnDrag(TableView *view, Event *e)
+             col->width = (uint32_t)col_width;
+ 
+         data->recompute_width = TRUE;
++        data->recompute_height = TRUE;
+         i_document_size(view, data);
+         view_update(cast(view, View));
+     }
+@@ -1052,7 +1087,10 @@ static void i_OnExit(TableView *view, Event *e)
+     data->mouse_sep = UINT32_MAX;
+     if (data->mouse_down == FALSE)
+         i_set_cursor(view, data, ekGUI_CURSOR_ARROW);
+-    view_update(cast(view, View));
++    /*
++        TODO: changing cursor doesn't need view update
++        view_update(cast(view, View));
++    */
+     unref(e);
+ }
+ 
+@@ -1237,7 +1275,10 @@ static void i_OnUp(TableView *view, Event *e)
+     data->resize_mouse_x = UINT32_MAX;
+     data->resize_col_width = UINT32_MAX;
+     i_set_cursor(view, data, ekGUI_CURSOR_ARROW);
+-    view_update(cast(view, View));
++    /*
++        TODO: changing cursor doesn't need view update
++        view_update(cast(view, View));
++    */
+     unref(e);
+ }
+ 
+@@ -1685,6 +1726,22 @@ uint32_t tableview_new_column_text(TableView *view)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void tableview_remove_column(TableView *view, uint32_t index)
++{
++
++    TData *data = view_get_data(cast(view, View), TData);
++    uint32_t ncols = arrst_size(data->columns, Column);
++    cassert_no_null(data);
++    if (ncols > index)
++    {
++        arrst_delete(data->columns, index, i_remove_column, Column);
++        data->redraw_header = TRUE;
++        view_update(cast(view, View));
++    }
++}
++
++/*---------------------------------------------------------------------------*/
++
+ void tableview_column_width(TableView *view, const uint32_t column_id, const real32_t width)
+ {
+     TData *data = view_get_data(cast(view, View), TData);
+@@ -2117,4 +2174,4 @@ uint32_t tableview_get_focus_row(const TableView *view)
+ void tableview_scroll_visible(TableView *view, const bool_t horizontal, const bool_t vertical)
+ {
+     view_scroll_visible(cast(view, View), horizontal, vertical);
+-}
+\ No newline at end of file
++}
+diff --git a/src/gui/tableview.h b/src/gui/tableview.h
+index 3da676f..a5b5ee4 100644
+--- a/src/gui/tableview.h
++++ b/src/gui/tableview.h
+@@ -31,6 +31,8 @@ _gui_api void tableview_size(TableView *view, S2Df size);
+ 
+ _gui_api uint32_t tableview_new_column_text(TableView *view);
+ 
++_gui_api void tableview_remove_column(TableView *view, uint32_t index);
++
+ _gui_api void tableview_column_width(TableView *view, const uint32_t column_id, const real32_t width);
+ 
+ _gui_api void tableview_column_limits(TableView *view, const uint32_t column_id, const real32_t min, const real32_t max);

@@ -53,8 +53,6 @@ if (nappgui_src_ADDED)
   add_subdirectory(${NAPPGUI_ROOT_PATH} EXCLUDE_FROM_ALL)
   # to properly link nappgui
   include(${NAPPGUI_ROOT_PATH}/prj/NAppCompilers.cmake)
-  # to set NAP_TARGET_SRC_EXTENSION
-  include(${NAPPGUI_ROOT_PATH}/prj/NAppTarget.cmake)
   # to correctly detect platform
   nap_config_compiler()
 endif()

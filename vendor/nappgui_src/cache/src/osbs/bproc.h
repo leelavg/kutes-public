@@ -25,6 +25,8 @@ _osbs_api uint32_t bproc_wait(Proc *proc);
 
 _osbs_api bool_t bproc_finish(Proc *proc, uint32_t *code);
 
+_osbs_api void bproc_wait_exit(Proc **proc);
+
 _osbs_api bool_t bproc_read(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsize, perror_t *error);
 
 _osbs_api bool_t bproc_eread(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsize, perror_t *error);

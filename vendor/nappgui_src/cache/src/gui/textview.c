@@ -378,6 +378,17 @@ void textview_select(TextView *view, const int32_t start, const int32_t end)
 
 /*---------------------------------------------------------------------------*/
 
+void textview_del_sel(TextView *view)
+{
+    uint32_t nonused = 0;
+    cassert_no_null(view);
+    cassert_no_null(view->component.context);
+    cassert_no_nullf(view->component.context->func_text_set_prop);
+    view->component.context->func_text_set_prop(view->component.ositem, (enum_t)ekGUI_TEXT_DELETE, cast(&nonused, void));
+}
+
+/*---------------------------------------------------------------------------*/
+
 void textview_show_select(TextView *view, const bool_t show)
 {
     cassert_no_null(view);

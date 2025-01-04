@@ -63,6 +63,8 @@ _gui_api void textview_editable(TextView *view, const bool_t is_editable);
 
 _gui_api void textview_select(TextView *view, const int32_t start, const int32_t end);
 
+_gui_api void textview_del_sel(TextView *view);
+
 _gui_api void textview_show_select(TextView *view, const bool_t show);
 
 _gui_api void textview_scroll_caret(TextView *view);

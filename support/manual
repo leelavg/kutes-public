@@ -1,0 +1,47 @@
+===== commands
+
+ps -fxo pid,ppid,pgid,tpgid,sess,args
+
+echo ===== [first $BASHPID] =====; (echo [second $BASHPID]; while true; do date; sleep 1; done > /tmp/manager.log 2>&1 &) && prev=$(date +%s); while true; do now=$(date +%s); echo $((now-prev))s; sleep 2; done;
+
+echo ===== [first $BASHPID] =====; (echo [second $BASHPID]; (echo [third $BASHPID]; while true; do date; sleep 1; done > /tmp/manager3.log 2>&1 &); while true; do date; sleep 1; done > /tmp/manager.log 2>&1 & ) && prev=$(date +%s); while true; do now=$(date +%s); echo $((now-prev))s; sleep 2; done;
+
+for /l %n in (1, 0, 2) do (time /t && ping -n 1 127.0.0.1 > nul && time /t 1>&2)
+
+sleep infinity
+
+while true; do date; sleep 1; done;
+
+(while true; do date --iso-8601=ns>&2; sleep .5; done &); while true; do date --iso-8601=ns; sleep .2; done;
+
+cat .cache/out-large.json
+type .cache/out-large.json
+
+cat .cache/out-mid.json
+type .cache/out-mid.json
+
+cat .cache/out-single.json
+type .cache/out-single.json
+
+mkfifo /tmp/f{0,1,2}
+bash <>/tmp/f0 1>/tmp/f1 2>/tmp/f2
+echo "command" >/tmp/f0
+tail -f /tmp/f{1,2}
+
+start "" /wait /b /i cmd /c "title kutes && tasklist /v /fi "imagename eq cmd.exe" /fo csv | findstr kutes && <cmd>"
+
+===== bugs/known issues
+
+when the window is closed with a long running command (ex: sleep infinity) internal schedule errors out even after stopping the proc, just continue
+tail doesn't work in wine, it always scrolls to end
+please properly handle errors at the earliest
+replace assert text with gh issues page
+there will be a memory leak when out-single.json is parsed
+for allocator proxy name should be configurable?
+
+===== scratch space
+
+table:
+sort, filter not required now
+col search, import & export
+main --> new pane for exploration

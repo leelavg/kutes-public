@@ -1,0 +1,51 @@
+Make stderr as well nonblocking, depends on previously made changes
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/src/osbs/unix/bproc.c b/src/osbs/unix/bproc.c
+index cb88954..7db2a56 100644
+--- a/src/osbs/unix/bproc.c
++++ b/src/osbs/unix/bproc.c
+@@ -110,6 +110,12 @@ static bool_t i_pipes(int pipes[8])
+         return FALSE;
+     }
+ 
++    if (fcntl(pipes[4], F_SETFL, fcntl(pipes[4], F_GETFL) | O_NONBLOCK) < 0)
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     if (pipe(pipes + 6) == -1)
+     {
+         i_close_pipes(pipes);
+@@ -384,6 +390,12 @@ bool_t bproc_eread(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsiz
+         ptr_assign(error, ekPOK);
+         return FALSE;
+     }
++    else if (errno == EAGAIN)
++    {
++        ptr_assign(rsize, 0);
++        ptr_assign(error, ekPAGAIN);
++        return FALSE;
++    }
+     else
+     {
+         ptr_assign(rsize, 0);
+diff --git a/src/osbs/win/bproc.c b/src/osbs/win/bproc.c
+index decbdf0..4805cbd 100644
+--- a/src/osbs/win/bproc.c
++++ b/src/osbs/win/bproc.c
+@@ -113,6 +113,12 @@ static bool_t i_pipes(HANDLE *pipes)
+         return FALSE;
+     }
+ 
++    if (!SetNamedPipeHandleState(pipes[STDERR_READ_PARENT], &nwMode, NULL, NULL))
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     if (!SetHandleInformation(pipes[STDERR_READ_PARENT], HANDLE_FLAG_INHERIT, 0))
+     {
+         i_close_pipes(pipes);

@@ -1,0 +1,117 @@
+Ability to delete selected text without clearing whole textview
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/src/draw2d/guictx.hxx b/src/draw2d/guictx.hxx
+index ba940e2..22557e9 100644
+--- a/src/draw2d/guictx.hxx
++++ b/src/draw2d/guictx.hxx
+@@ -253,7 +253,8 @@ typedef enum _gui_text_t
+     ekGUI_TEXT_SCROLL,
+     ekGUI_TEXT_WRAP_MODE,
+     ekGUI_TEXT_APPLY_ALL,
+-    ekGUI_TEXT_APPLY_SEL
++    ekGUI_TEXT_APPLY_SEL,
++    ekGUI_TEXT_DELETE
+ } gui_text_t;
+
+typedef enum _gui_web_t
+diff --git a/src/gui/textview.c b/src/gui/textview.c
+index 3fe9c31..f89f78a 100644
+--- a/src/gui/textview.c
++++ b/src/gui/textview.c
+@@ -378,6 +378,17 @@ void textview_select(TextView *view, const int32_t start, const int32_t end)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void textview_del_sel(TextView *view)
++{
++    uint32_t nonused = 0;
++    cassert_no_null(view);
++    cassert_no_null(view->component.context);
++    cassert_no_nullf(view->component.context->func_text_set_prop);
++    view->component.context->func_text_set_prop(view->component.ositem, (enum_t)ekGUI_TEXT_DELETE, cast(&nonused, void));
++}
++
++/*---------------------------------------------------------------------------*/
++
+ void textview_show_select(TextView *view, const bool_t show)
+ {
+     cassert_no_null(view);
+diff --git a/src/gui/textview.h b/src/gui/textview.h
+index 52828e1..bf26375 100644
+--- a/src/gui/textview.h
++++ b/src/gui/textview.h
+@@ -63,6 +63,8 @@ _gui_api void textview_editable(TextView *view, const bool_t is_editable);
+ 
+ _gui_api void textview_select(TextView *view, const int32_t start, const int32_t end);
+ 
++_gui_api void textview_del_sel(TextView *view);
++
+ _gui_api void textview_show_select(TextView *view, const bool_t show);
+ 
+ _gui_api void textview_scroll_caret(TextView *view);
+diff --git a/src/osgui/gtk/ostext.c b/src/osgui/gtk/ostext.c
+index c8a52e8..dc6c5c7 100644
+--- a/src/osgui/gtk/ostext.c
++++ b/src/osgui/gtk/ostext.c
+@@ -818,6 +818,19 @@ void ostext_property(OSText *view, const gui_text_t prop, const void *value)
+         i_set_wrap_mode(view->tview, wrap);
+         break;
+     }
++
++    case ekGUI_TEXT_DELETE:
++    {
++        GtkTextIter start, end;
++        gtk_text_buffer_get_selection_bounds(view->buffer, &start, &end);
++        if (view->select_start != INT32_MAX)
++        {
++            i_iter(view->buffer, view->select_start, &start);
++            i_iter(view->buffer, view->select_end, &end);
++            gtk_text_buffer_delete(view->buffer, &start, &end);
++        }
++        break;
++    }
+         cassert_default();
+     }
+ }
+diff --git a/src/osgui/osx/ostext.m b/src/osgui/osx/ostext.m
+index 6e1b8aa..c847769 100644
+--- a/src/osgui/osx/ostext.m
++++ b/src/osgui/osx/ostext.m
+@@ -760,6 +760,20 @@ void ostext_property(OSText *view, const gui_text_t param, const void *value)
+         i_apply_sel(lview);
+         break;
+ 
++    /* untested */
++    case ekGUI_TEXT_DELETE:
++        if (lview->is_editable == YES)
++        {
++            [[lview textStorage] replaceCharactersInRange:[lview selectedRange] withString:nil];
++        }
++        else
++        {
++            [lview setEditable:YES];
++            [[lview textStorage] replaceCharactersInRange:[lview selectedRange] withString:nil];
++            [lview setEditable:NO];
++        }
++        break;
++
+         cassert_default();
+     }
+ }
+diff --git a/src/osgui/win/ostext.c b/src/osgui/win/ostext.c
+index 7ddf3de..1e50f7a 100644
+--- a/src/osgui/win/ostext.c
++++ b/src/osgui/win/ostext.c
+@@ -492,6 +492,10 @@ void ostext_property(OSText *view, const gui_text_t prop, const void *value)
+         break;
+     }
+ 
++    case ekGUI_TEXT_DELETE:
++        SendMessage(view->control.hwnd, EM_REPLACESEL, 0, (LPARAM)NULL);
++        break;
++
+         cassert_default();
+     }
+ }

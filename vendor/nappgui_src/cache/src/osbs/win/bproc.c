@@ -12,6 +12,7 @@
 
 #include "osbs.inl"
 #include "bproc.h"
+#include "bthread.h"
 #include <sewer/bmem.h>
 #include <sewer/cassert.h>
 #include <sewer/ptr.h>
@@ -31,10 +32,12 @@
 #define STDOUT_WRITE_CHILD 3
 #define STDERR_READ_PARENT 4
 #define STDERR_WRITE_CHILD 5
+#define CLOSE_WRITE 6
+#define CLOSE_READ 7
 
 struct _process_t
 {
-    HANDLE pipes[6];
+    HANDLE pipes[8];
     PROCESS_INFORMATION info;
 };
 
@@ -44,7 +47,7 @@ static Proc *i_create(HANDLE *pipes, PROCESS_INFORMATION *info)
 {
     Proc *proc = cast(bmem_malloc(sizeof(Proc)), Proc);
     _osbs_proc_alloc();
-    bmem_copy_n(proc->pipes, pipes, 6, HANDLE);
+    bmem_copy_n(proc->pipes, pipes, 8, HANDLE);
     proc->info = *info;
     return proc;
 }
@@ -55,7 +58,7 @@ static void i_close_pipes(HANDLE *pipes)
 {
     uint32_t i;
     cassert_no_null(pipes);
-    for (i = 0; i < 6; ++i)
+    for (i = 0; i < 8; ++i)
     {
         if (pipes[i] != NULL)
             CloseHandle(pipes[i]);
@@ -71,7 +74,7 @@ static bool_t i_pipes(HANDLE *pipes)
     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
     saAttr.bInheritHandle = TRUE;
     saAttr.lpSecurityDescriptor = NULL;
-    bmem_zero_n(pipes, 6, HANDLE);
+    bmem_zero_n(pipes, 8, HANDLE);
 
     if (!CreatePipe(&pipes[STDIN_READ_CHILD], &pipes[STDIN_WRITE_PARENT], &saAttr, 0))
     {
@@ -110,7 +113,19 @@ static bool_t i_pipes(HANDLE *pipes)
         return FALSE;
     }
 
+    if (!SetNamedPipeHandleState(pipes[STDERR_READ_PARENT], &nwMode, NULL, NULL))
+    {
+        i_close_pipes(pipes);
+        return FALSE;
+    }
+
     if (!SetHandleInformation(pipes[STDERR_READ_PARENT], HANDLE_FLAG_INHERIT, 0))
+    {
+        i_close_pipes(pipes);
+        return FALSE;
+    }
+
+    if (!CreatePipe(&pipes[CLOSE_READ], &pipes[CLOSE_WRITE], NULL, 0))
     {
         i_close_pipes(pipes);
         return FALSE;
@@ -161,7 +176,7 @@ static bool_t i_exec(const char_t *command, HANDLE *pipes, PROCESS_INFORMATION *
 
 Proc *bproc_exec(const char_t *command, perror_t *error)
 {
-    HANDLE pipes[6];
+    HANDLE pipes[8];
     PROCESS_INFORMATION info;
 
     if (i_pipes(pipes) == FALSE)
@@ -195,6 +210,23 @@ void bproc_close(Proc **proc)
     _osbs_proc_dealloc();
     bmem_free(*dcast(proc, byte_t));
     *proc = NULL;
+}
+
+/*---------------------------------------------------------------------------*/
+
+void bproc_wait_exit(Proc **proc)
+{
+    cassert_no_null(proc);
+    cassert_no_null(*proc);
+    cassert_no_null((*proc)->info.hProcess);
+    cassert_no_null((*proc)->info.hThread);
+    while (*proc)
+    {
+        BOOL ok = ReadFile((*proc)->pipes[CLOSE_READ], NULL, 0, NULL, NULL);
+        if (!ok && GetLastError() == ERROR_BROKEN_PIPE)
+            break;
+        bthread_sleep(100);
+    }
 }
 
 /*---------------------------------------------------------------------------*/

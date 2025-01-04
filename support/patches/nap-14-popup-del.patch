@@ -1,0 +1,93 @@
+Delete pop element and remove fps restriction and table
+
+restricting table on draw hits UX, need to relook fixing gtk view_update on scroll
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/src/gui/popup.c b/src/gui/popup.c
+index 1e89a80..903e865 100644
+--- a/src/gui/popup.c
++++ b/src/gui/popup.c
+@@ -161,6 +161,19 @@ void popup_set_elem(PopUp *popup, const uint32_t index, const char_t *text, cons
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void popup_del_elem(PopUp *popup, const uint32_t index)
++{
++    cassert_no_null(popup);
++    cassert_no_null(popup->component.context);
++    cassert_no_nullf(popup->component.context->func_popup_set_elem);
++    cassert(index < arrst_size(popup->elems, PElem));
++    arrst_delete(popup->elems, index, i_remove_elem, PElem);
++    popup->component.context->func_popup_set_elem(popup->component.ositem, ekCTRL_OP_DEL, index, NULL, NULL);
++    popup->component.context->func_popup_list_height(popup->component.ositem, arrst_size(popup->elems, PElem));
++}
++
++/*---------------------------------------------------------------------------*/
++
+ void popup_clear(PopUp *popup)
+ {
+     uint32_t i, n;
+diff --git a/src/gui/popup.h b/src/gui/popup.h
+index 2b922ba..08ff5d3 100644
+--- a/src/gui/popup.h
++++ b/src/gui/popup.h
+@@ -25,6 +25,8 @@ _gui_api void popup_add_elem(PopUp *popup, const char_t *text, const Image *imag
+ 
+ _gui_api void popup_set_elem(PopUp *popup, const uint32_t index, const char_t *text, const Image *image);
+ 
++_gui_api void popup_del_elem(PopUp *popup, const uint32_t index);
++
+ _gui_api void popup_clear(PopUp *popup);
+ 
+ _gui_api uint32_t popup_count(const PopUp *popup);
+diff --git a/src/gui/tableview.c b/src/gui/tableview.c
+index 690b921..ebd5d4f 100644
+--- a/src/gui/tableview.c
++++ b/src/gui/tableview.c
+@@ -142,8 +142,8 @@ static TData *i_create_data(View *view)
+     data->multisel_mode = ekCTRL_MSEL_NO;
+     data->cursor = ekGUI_CURSOR_ARROW;
+     /* .08 s == 80 ms ~= 12 fps */
+-    data->clock = clock_create(.08);
+-    clock_frame(data->clock, NULL, NULL);
++    /* data->clock = clock_create(.08);
++    clock_frame(data->clock, NULL, NULL); */
+     return data;
+ }
+ 
+@@ -170,7 +170,7 @@ static void i_destroy_data(TData **data)
+     listener_destroy(&(*data)->OnHeaderClick);
+     arrst_destroy(&(*data)->columns, i_remove_column, Column);
+     arrst_destroy(&(*data)->selected, NULL, uint32_t);
+-    clock_destroy(&(*data)->clock);
++    /* clock_destroy(&(*data)->clock); */
+     heap_delete(data, TData);
+ }
+ 
+@@ -337,12 +337,12 @@ static void i_OnDraw(TableView *view, Event *e)
+         the frame rate and also stopped redraw on various events by going over
+         each one of them.
+     */
+-    if (!clock_frame(data->clock, NULL, NULL))
++    /* if (!clock_frame(data->clock, NULL, NULL))
+     {
+         data->draw_overlay = FALSE;
+         return;
+     }
+-    data->draw_overlay = TRUE;
++    data->draw_overlay = TRUE; */
+     freeze_width = i_freezed_width(data->columns, data->freeze_col_id);
+     nc = arrst_size(data->columns, Column);
+     nr = data->num_rows;
+@@ -621,8 +621,8 @@ static void i_OnOverlay(TableView *view, Event *e)
+     TData *data = view_get_data(cast(view, View), TData);
+     cassert_no_null(data);
+ 
+-    if (!data->draw_overlay)
+-        return;
++    /* if (!data->draw_overlay)
++        return; */
+ 
+     if (data->head_visible == TRUE)
+     {

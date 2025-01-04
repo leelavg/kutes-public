@@ -31,6 +31,8 @@ _gui_api void tableview_size(TableView *view, S2Df size);
 
 _gui_api uint32_t tableview_new_column_text(TableView *view);
 
+_gui_api void tableview_remove_column(TableView *view, uint32_t index);
+
 _gui_api void tableview_column_width(TableView *view, const uint32_t column_id, const real32_t width);
 
 _gui_api void tableview_column_limits(TableView *view, const uint32_t column_id, const real32_t min, const real32_t max);

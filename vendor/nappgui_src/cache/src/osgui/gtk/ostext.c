@@ -818,6 +818,19 @@ void ostext_property(OSText *view, const gui_text_t prop, const void *value)
         i_set_wrap_mode(view->tview, wrap);
         break;
     }
+
+    case ekGUI_TEXT_DELETE:
+    {
+        GtkTextIter start, end;
+        gtk_text_buffer_get_selection_bounds(view->buffer, &start, &end);
+        if (view->select_start != INT32_MAX)
+        {
+            i_iter(view->buffer, view->select_start, &start);
+            i_iter(view->buffer, view->select_end, &end);
+            gtk_text_buffer_delete(view->buffer, &start, &end);
+        }
+        break;
+    }
         cassert_default();
     }
 }
