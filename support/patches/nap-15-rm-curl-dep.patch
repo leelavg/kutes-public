@@ -1,0 +1,43 @@
+Remove curl dependence as I need inet only for json
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/prj/NAppTarget.cmake b/prj/NAppTarget.cmake
+index 7e99bdb..60a1db8 100644
+--- a/prj/NAppTarget.cmake
++++ b/prj/NAppTarget.cmake
+@@ -341,9 +341,12 @@ function(nap_source_files targetName dir group publicHeaders)
+                     endif()
+                 endif()
+ 
+-                nap_add_source_subdir(${targetName} ${dir})
+-                nap_add_source_file(${targetName} ${dir}/${child})
+-                nap_add_public_header(${targetName} ${dir}/${child} ${extLower} ${publicHeaders})
++                # we only require json but not http which requires curl on linux
++                if (NOT ${child} STREQUAL "oshttpreq.c")
++                    nap_add_source_subdir(${targetName} ${dir})
++                    nap_add_source_file(${targetName} ${dir}/${child})
++                    nap_add_public_header(${targetName} ${dir}/${child} ${extLower} ${publicHeaders})
++                endif()
+ 
+             endif()
+ 
+@@ -681,12 +684,12 @@ function(nap_link_inet targetName)
+         target_link_libraries(${targetName} wininet)
+ 
+     elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+-        find_package(CURL)
+-        if (${CURL_FOUND})
+-            target_link_libraries(${targetName} ${CURL_LIBRARY})
+-        else()
+-            message(ERROR "- libCURL is required. Try 'sudo apt-get install libcurl4-openssl-dev'")
+-        endif()
++        # find_package(CURL)
++        # if (${CURL_FOUND})
++        #     target_link_libraries(${targetName} ${CURL_LIBRARY})
++        # else()
++        #     message(ERROR "- libCURL is required. Try 'sudo apt-get install libcurl4-openssl-dev'")
++        # endif()
+ 
+     endif()
+ 

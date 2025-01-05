@@ -36,8 +36,8 @@ when the window is closed with a long running command (ex: sleep infinity) inter
 tail doesn't work in wine, it always scrolls to end
 please properly handle errors at the earliest
 replace assert text with gh issues page
-there will be a memory leak when out-single.json is parsed
 for allocator proxy name should be configurable?
+reduce internal memory fragmentation, like no need to clear array everytime cache needs to be filled for table?
 
 ===== scratch space
 
@@ -45,3 +45,4 @@ table:
 sort, filter not required now
 col search, import & export
 main --> new pane for exploration
+json without spaces increases processing a lot

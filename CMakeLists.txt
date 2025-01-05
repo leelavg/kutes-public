@@ -58,7 +58,6 @@ if (nappgui_src_ADDED)
 endif()
 
 if (yyjson_ADDED)
-  set(YYJSON_DISABLE_WRITER TRUE)
   add_subdirectory(${yyjson_SOURCE_DIR} EXCLUDE_FROM_ALL)
 endif()
 

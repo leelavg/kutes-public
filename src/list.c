@@ -1,21 +1,31 @@
-#include "gui.hxx"
 #include "kt.h"
-#include "yyjson.h"
+
+#include <yyjson.h>
 #include <nappgui.h>
-#include <time.h>
 #include <inet/json.h>
+
+#include <time.h>
+
 /* https://stackoverflow.com/a/17996915 */
 #define QUOTE(...) #__VA_ARGS__
-/* 65 is based on pod name length */
-#define TEMP_STR_LEN 65
+/* 66 is based on pod name length 64 + NULL byte */
+#define TEMP_STR_LEN 66
+/* due to usage of 32 bitmask for headers and having limits doesn't hurt */
+#define MAX_COLS 32
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 /*---------------------------------------------------------------------------*/
 
 typedef struct _column_t Column;
 typedef struct _columns_t Columns;
 typedef struct _tb_data_t Tbdata;
+typedef struct _ft_data_t Ftdata;
 
-/* TODO: enum isn't good in user facing API and rearrange based on usage */
+/*
+    TODO: enum isn't good in user facing API and rearrange based on usage
+    do we want to mandate user to supply data type or just parse json as raw?
+*/
 typedef enum _type_t
 {
     ktBOOL, /* 0 */
@@ -33,7 +43,6 @@ struct _column_t
     String *display;
     String *path;
     type_t type;
-    bool_t primary;
     bool_t freeze;
 };
 DeclSt(Column);
@@ -44,30 +53,51 @@ struct _columns_t
     ArrSt(Column) *cols;
 };
 
-DeclPt(yyjson_val);
+DeclPt(yyjson_mut_val);
 struct _tb_data_t
 {
     char_t tempstr[TEMP_STR_LEN];
     Layout *ops;
     TableView *tbview;
-    Edit *status;
-    yyjson_val *jval;
-    yyjson_doc *doc;
+    Edit *line;
+    Label *status;
+    yyjson_mut_val *items;
+    yyjson_mut_doc *doc;
+    ArrSt(uint32_t) *widths;
     ArrPt(String) *path;
     ArrPt(String) *display;
     ArrSt(type_t) *type;
-    ArrPt(yyjson_val) *ele;
+    ArrPt(yyjson_mut_val) *ele;
+    byte_t *rowbuf;
     uint32_t ncols;
     uint32_t nrows;
     uint32_t hmask;
-    uint32_t primary;
     uint32_t freeze;
+    real32_t font_width;
     bool_t invalid;
+};
+
+struct _ft_data_t
+{
+    byte_t read_buf[READ_BUFFER];
+    Edit *cmdin;
+    Button *jptr;
+    Button *run;
+    TextView *tview;
+    Label *status;
+    Proc *proc;
+    uint32_t rsize;
+    run_t run_state;
+    bool_t stop;
+    uint32_t tot_len;
+    opsv *locker;
+    yyjson_mut_doc *mdoc;
+    yyjson_alc *alc;
 };
 
 /*---------------------------------------------------------------------------*/
 
-static char_t cjson[] = QUOTE(
+static const char_t cjson[] = QUOTE(
 
     {
         "kind" : "Pod",
@@ -77,7 +107,6 @@ static char_t cjson[] = QUOTE(
                     "display" : "name",
                     "path" : "/metadata/name",
                     "type" : 5,
-                    "primary" : true,
                     "freeze" : true
                 },
                 {
@@ -94,11 +123,29 @@ static char_t cjson[] = QUOTE(
                     "display" : "status",
                     "path" : "/status/phase",
                     "type" : 5
+                },
+                {
+                    "display" : "ns",
+                    "path" : "/metadata/namespace",
+                    "type" : 5
+                },
+                {
+                    "display" : "uid",
+                    "path" : "/metadata/uid",
+                    "type" : 5
                 }
+
             ]
     }
 
 );
+
+static const char_t *info = "\
+command is stopped if stdout/stderr exceeds 64 KiB.\n\n\
+if jsonpointer is checked, inprocess jsonpointer path search is performed (faster).\n\n\
+suggested external json filtering programs are jq (C), dasel (Go), jsonquerylang (Javascript/Python).\n\n\
+UI will freeze if your command stops (like 'sleep') from it's stdin.\
+";
 
 /*---------------------------------------------------------------------------*/
 
@@ -114,7 +161,6 @@ void cols_bind(void)
     dbind(Column, String *, display);
     dbind(Column, String *, path);
     dbind(Column, type_t, type);
-    dbind(Column, bool_t, primary);
     dbind(Column, bool_t, freeze);
     dbind(Columns, String *, kind);
     dbind(Columns, ArrSt(Column) *, cols);
@@ -224,19 +270,20 @@ static uint32_t human_duration(const char_t *then, time_t now_s, char_t *buf, ui
 
 /*---------------------------------------------------------------------------*/
 
-static void destroy(Tbdata **data)
+static void tb_destroy(Tbdata **data)
 {
-    arrpt_destroy(&(*data)->ele, NULL, yyjson_val);
-    yyjson_doc_free((*data)->doc);
+    arrst_destroy(&(*data)->widths, NULL, uint32_t);
+    arrpt_destroy(&(*data)->ele, NULL, yyjson_mut_val);
     arrpt_destroy(&(*data)->path, str_destroy, String);
     arrpt_destroy(&(*data)->display, str_destroy, String);
     arrst_destroy(&(*data)->type, NULL, type_t);
+    heap_delete_n(&(*data)->rowbuf, ((TEMP_STR_LEN + 1) * MAX_COLS), byte_t);
     heap_delete(data, Tbdata);
 }
 
 /*---------------------------------------------------------------------------*/
 
-static void destroy_closure(const Closure *context)
+static void tb_destroy_clr(const Destroyer *context)
 {
     Tbdata *data = cast(context->data, Tbdata);
     context->func_destroy(dcast(&data, void));
@@ -244,16 +291,31 @@ static void destroy_closure(const Closure *context)
 
 /*---------------------------------------------------------------------------*/
 
-static Closure *create_destory(Tbdata **data)
+static Tbdata *tb_create_destory(Destroyer **destr)
 {
-    Closure *cls = heap_new(Closure);
-    *data = heap_new0(Tbdata);
-    FUNC_CHECK_DESTROY(destroy, Tbdata);
-    FUNC_CHECK_CLOSURE(destroy_closure, Closure);
-    cls->data = *data;
-    cls->func_destroy = (FPtr_destroy)destroy;
-    cls->func_closure = (FPtr_closure)destroy_closure;
-    return cls;
+    Tbdata *data = heap_new0(Tbdata);
+    data->widths = arrst_create(uint32_t);
+    data->ele = arrpt_create(yyjson_mut_val);
+    data->path = arrpt_create(String);
+    data->display = arrpt_create(String);
+    data->type = arrst_create(type_t);
+    data->rowbuf = heap_new_n((TEMP_STR_LEN + 1) * MAX_COLS, byte_t);
+
+    *destr = heap_new(Destroyer);
+    FUNC_CHECK_DESTROY(tb_destroy, Tbdata);
+    FUNC_CHECK_CLOSURE(tb_destroy_clr, Destroyer);
+    (*destr)->data = data;
+    (*destr)->func_destroy = (FPtr_destroy)tb_destroy;
+    (*destr)->func_closure = (FPtr_closure)tb_destroy_clr;
+
+    return data;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void nodata_destroy(Destroyer **destr)
+{
+    *destr = heap_new0(Destroyer);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -285,27 +347,40 @@ static void onCol_add(Tbdata *data, Event *e)
     PopUp *json_type = layout_get_popup(add_col, 2, 0);
     uint32_t selected = popup_get_selected(json_type);
     /* TODO: validations */
-    if (selected)
+    if (data->ncols == MAX_COLS)
+    {
+        bstd_sprintf(data->tempstr, TEMP_STR_LEN, "+ max columns (%d) exceeded", MAX_COLS);
+        label_text(data->status, data->tempstr);
+        log_printf("columns more than %d are dropped", MAX_COLS);
+        return;
+    }
+    else if (selected)
     {
         const char_t *name = edit_get_text(disp_name);
         const char_t *path = edit_get_text(json_ppth);
         const uint32_t col_id = data->ncols;
+        uint32_t hlen = 0;
         if (!(name && name[0] && path && path[0]))
             return;
-        bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s", name);
+        hlen = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s", name);
         arrpt_append(data->display, str_c(data->tempstr), String);
         arrpt_append(data->path, str_c(path), String);
         arrst_append(data->type, selected - 1, type_t);
-        data->ncols++;
-        data->invalid = TRUE;
         tableview_header_title(data->tbview,
                                tableview_new_column_text(data->tbview),
                                data->tempstr);
+        arrst_append(data->widths, MIN(hlen, TEMP_STR_LEN), uint32_t);
+        arrst_append(data->widths, 0, uint32_t);
+        tableview_column_limits(data->tbview, data->ncols,
+                                data->font_width * *arrst_get(data->widths, data->ncols * 2, uint32_t),
+                                data->font_width * (TEMP_STR_LEN + 1));
+        data->ncols++;
+        data->invalid = TRUE;
 
         {
             Layout *rem_col = layout_get_layout(data->ops, 0, 1);
             PopUp *col_name = layout_get_popup(rem_col, 0, 0);
-            bstd_sprintf(data->tempstr, sizeof(data->tempstr), "[%d] %s", col_id, name);
+            bstd_sprintf(data->tempstr, TEMP_STR_LEN, "[%d] %s", col_id, name);
             popup_add_elem(col_name, data->tempstr, NULL);
         }
 
@@ -329,6 +404,8 @@ static void onCol_rem(Tbdata *data, Event *e)
         arrpt_delete(data->display, selected - 1, str_destroy, String);
         arrpt_delete(data->path, selected - 1, str_destroy, String);
         arrst_delete(data->type, selected - 1, NULL, type_t);
+        arrst_delete(data->widths, 2 * (selected - 1), NULL, uint32_t); /* header */
+        arrst_delete(data->widths, 2 * (selected - 1), NULL, uint32_t); /* row */
         data->ncols--;
         data->invalid = TRUE;
         tableview_remove_column(data->tbview, selected - 1);
@@ -338,7 +415,7 @@ static void onCol_rem(Tbdata *data, Event *e)
             popup_clear(col_name);
             popup_add_elem(col_name, "column", NULL);
             arrpt_foreach_const(name, data->display, String)
-                bstd_sprintf(data->tempstr, sizeof(data->tempstr), "[%d] %s", col_id, tc(name));
+                bstd_sprintf(data->tempstr, TEMP_STR_LEN, "[%d] %s", col_id, tc(name));
                 popup_add_elem(col_name, data->tempstr, NULL);
                 col_id++;
             arrpt_end();
@@ -359,40 +436,39 @@ static void onQuery_run(Tbdata *data, Event *e)
     if (jptr && jptr[0])
     {
         uint32_t len;
-        yyjson_val *root = yyjson_doc_get_root(data->doc);
-        yyjson_val *val = yyjson_ptr_get(root, jptr);
-        /* switch statement copied from yyjson_get_type_desc function */
-        switch (yyjson_get_tag(val))
+        yyjson_mut_val *val = yyjson_mut_doc_ptr_get(data->doc, jptr);
+        /* switch statement copied from yyjson_mut_get_type_desc function */
+        switch (yyjson_mut_get_tag(val))
         {
         case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
-            len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s", "raw - not printed");
+            cassert_msg(FALSE, "we are not parsing json as raw");
+        case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+        case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
+            len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s", yyjson_mut_get_str(val));
             break;
         case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-            len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s", "null - literal");
-            break;
-        case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE | YYJSON_SUBTYPE_NOESC:
-            len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s", yyjson_get_str(val));
+            len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s", "null - literal");
             break;
         case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-            len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s%ld%s", "array - [", yyjson_arr_size(val), "] item(s)");
+            len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s%ld%s", "array - [", yyjson_mut_arr_size(val), "] item(s)");
             break;
         case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-            len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s%ld%s", "object - [", yyjson_obj_size(val), "] key-value pair(s)");
+            len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s%ld%s", "object - [", yyjson_mut_obj_size(val), "] key-value pair(s)");
             break;
         case YYJSON_TYPE_BOOL:
-            len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s%s", "bool - ", yyjson_get_bool(val) ? "true" : "false");
+            len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s%s", "bool - ", yyjson_mut_get_bool(val) ? "true" : "false");
             break;
         case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
-            len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s%lu", "uint - ", yyjson_get_uint(val));
+            len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s%lu", "uint - ", yyjson_mut_get_uint(val));
             break;
         case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
-            len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s%ld", "int - ", yyjson_get_sint(val));
+            len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s%ld", "int - ", yyjson_mut_get_sint(val));
             break;
         case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
-            len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s%.2f", "real -", yyjson_get_real(val));
+            len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s%.2f", "real -", yyjson_mut_get_real(val));
             break;
         default:
-            len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s", "unknown");
+            len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s", "unknown");
             break;
         }
         if (len)
@@ -411,13 +487,13 @@ static void onRow_open(Tbdata *data, Event *e)
 
 /*---------------------------------------------------------------------------*/
 
-static ___INLINE yyjson_val *get_tb_value(Tbdata *data, uint32_t row, uint32_t col)
+static ___INLINE yyjson_mut_val *get_tb_value(Tbdata *data, uint32_t row, uint32_t col)
 {
     /*
     1D to 2D: pos = x + width*y
     2D to 1D: x = pos % width; y = pos / width;
     */
-    return arrpt_get(data->ele, col + data->ncols * row, yyjson_val);
+    return arrpt_get(data->ele, col + data->ncols * row, yyjson_mut_val);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -425,15 +501,15 @@ static ___INLINE yyjson_val *get_tb_value(Tbdata *data, uint32_t row, uint32_t c
 static void tb_cache(Tbdata *data)
 {
     size_t idx, max;
-    yyjson_val *val;
+    yyjson_mut_val *val;
     if (data->invalid)
     {
         /* TODO: optimize if there is a latency */
-        arrpt_clear(data->ele, NULL, yyjson_val);
-        yyjson_arr_foreach(data->jval, idx, max, val)
+        arrpt_clear(data->ele, NULL, yyjson_mut_val);
+        yyjson_mut_arr_foreach(data->items, idx, max, val)
         {
             arrpt_foreach_const(path, data->path, String)
-                arrpt_append(data->ele, yyjson_ptr_get(val, tc(path)), yyjson_val);
+                arrpt_append(data->ele, yyjson_mut_ptr_get(val, tc(path)), yyjson_mut_val);
             arrpt_end()
         }
         data->invalid = FALSE;
@@ -457,46 +533,46 @@ static ___INLINE uint32_t fill_tempstr(Tbdata *data, uint32_t col, uint32_t row)
     switch (*jtype)
     {
     case ktBOOL:
-        len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s", yyjson_get_bool(get_tb_value(data, row, col)) ? "true" : "false");
+        len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s", yyjson_mut_get_bool(get_tb_value(data, row, col)) ? "true" : "false");
         break;
     case ktUINT:
     {
-        len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%lu", yyjson_get_uint(get_tb_value(data, row, col)));
+        len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%lu", yyjson_mut_get_uint(get_tb_value(data, row, col)));
         break;
     }
     case ktSINT:
     {
-        len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%ld", yyjson_get_sint(get_tb_value(data, row, col)));
+        len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%ld", yyjson_mut_get_sint(get_tb_value(data, row, col)));
         break;
     }
     case ktINT:
     {
-        len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%d", yyjson_get_int(get_tb_value(data, row, col)));
+        len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%d", yyjson_mut_get_int(get_tb_value(data, row, col)));
         break;
     }
     case ktNUM:
     {
-        len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%.2f", yyjson_get_num(get_tb_value(data, row, col)));
+        len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%.2f", yyjson_mut_get_num(get_tb_value(data, row, col)));
         break;
     }
     case ktSTR:
-        len = bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s", yyjson_get_str(get_tb_value(data, row, col)));
+        len = bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s", yyjson_mut_get_str(get_tb_value(data, row, col)));
         break;
     case ktTIM:
     {
-        const char_t *str = yyjson_get_str(get_tb_value(data, row, col));
+        const char_t *str = yyjson_mut_get_str(get_tb_value(data, row, col));
         if (data->hmask & (1 << col))
-            len = human_duration(str, time(NULL), data->tempstr, sizeof(data->tempstr));
-        else
         {
-            str_copy_c(data->tempstr, sizeof(data->tempstr), str);
+            str_copy_c(data->tempstr, TEMP_STR_LEN, str);
             len = strlen(str);
         }
+        else
+            len = human_duration(str, time(NULL), data->tempstr, TEMP_STR_LEN);
         break;
     }
         cassert_default();
     }
-    return len;
+    return len > TEMP_STR_LEN ? TEMP_STR_LEN : len;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -504,11 +580,8 @@ static ___INLINE uint32_t fill_tempstr(Tbdata *data, uint32_t col, uint32_t row)
 static void tb_OnData(Tbdata *data, Event *e)
 {
     /*
-        TODO: too bad that the sdk invokes this func for every mouse movement
-        even when all the data was fed due to table widget kinda behaving like
-        immediate mode.
-
-        this is the tightest function and lookout for any optimizations.
+        TODO: this is the tightest function as data is called for a refresh after
+        every possible view update and lookout for any optimizations.
     */
     uint32_t etype = event_type(e);
     switch (etype)
@@ -531,7 +604,10 @@ static void tb_OnData(Tbdata *data, Event *e)
     {
         const EvTbPos *pos = event_params(e, EvTbPos);
         EvTbCell *cell = event_result(e, EvTbCell);
-        fill_tempstr(data, pos->col, pos->row);
+        uint32_t len = fill_tempstr(data, pos->col, pos->row);
+        uint32_t *cell_len = arrst_get(data->widths, 2 * pos->col + 1, uint32_t);
+        if (*cell_len < len)
+            *cell_len = len;
         cell->text = data->tempstr;
         break;
     }
@@ -543,22 +619,42 @@ static void tb_OnData(Tbdata *data, Event *e)
             uint32_t col;
             uint32_t len = 0;
             uint32_t next = 0;
-            /* TODO: allocate on stack rather than this mumbo jumbo? */
-            byte_t *buffer = heap_new_n((TEMP_STR_LEN + 1) * data->ncols, byte_t);
             for (col = 0; col < data->ncols; col++)
             {
                 len = fill_tempstr(data, col, row);
-                bmem_copy(buffer + (next * sizeof(byte_t)), cast(data->tempstr, byte_t), len);
+                bmem_copy(data->rowbuf + (next * sizeof(byte_t)), cast(data->tempstr, byte_t), len);
                 next += len;
-                bmem_set1(buffer + (next * sizeof(byte_t)), 1, ' ');
+                bmem_set1(data->rowbuf + (next * sizeof(byte_t)), 1, ' ');
                 next++;
             }
             if (next)
             {
-                bmem_set_zero(buffer + ((next - 1) * sizeof(char_t)), 1);
-                edit_text(data->status, cast(buffer, char_t));
+                bmem_set_zero(data->rowbuf + ((next - 1) * sizeof(char_t)), 1);
+                edit_text(data->line, cast(data->rowbuf, char_t));
             }
-            heap_delete_n(&buffer, ((TEMP_STR_LEN + 1) * data->ncols), byte_t);
+        }
+        {
+            /* gives table a compact look, slightly collapses larger cells and relaxes shorter cells */
+            uint32_t *width = arrst_all(data->widths, uint32_t);
+            uint32_t i = 0, extra = 0, len = 0;
+            real32_t fwidth = 0;
+            for (i = 0; i < data->ncols; i++)
+            {
+                extra = 0;
+                fwidth = data->font_width;
+                len = MAX(width[2 * i], width[2 * i + 1]);
+                /* these calculations are being done here as there is no callback for overlay,
+                drawing after headers would've reduced most of these magic numbers. */
+                if (len < TEMP_STR_LEN && width[2 * i] + 4 > width[2 * i + 1])
+                    /* preserve shorter cells, ensure row content is higher than header */
+                    extra = 3;
+                else if (width[2 * i + 1] > TEMP_STR_LEN * 2 / 3)
+                    /* collapses larger cells, on my system regular font size is ~12% higher, reducing by
+                    that amount until a legit fix if found. */
+                    fwidth *= .89f;
+                tableview_column_width(data->tbview, i, fwidth * (len + extra));
+                width[2 * i + 1] = 0;
+            }
         }
         break;
     }
@@ -568,18 +664,17 @@ static void tb_OnData(Tbdata *data, Event *e)
 
 /*---------------------------------------------------------------------------*/
 
-static void add_list_to_layout(App *app, yyjson_doc *doc, PopUp *pop, Layout *vscroll)
+static Destroyer *add_list_to_layout(PopUp *pop, Layout *vscroll, yyjson_mut_doc *doc, Label *status)
 {
-    yyjson_val *root = yyjson_doc_get_root(doc);
-    yyjson_val *items = yyjson_ptr_get(root, "/items");
-    yyjson_val *first = yyjson_ptr_get(items, "/0/kind");
+    yyjson_mut_val *items = yyjson_mut_doc_ptr_get(doc, "/items");
+    yyjson_mut_val *first = yyjson_mut_ptr_get(items, "/0/kind");
     const char_t *kind;
+    Destroyer *destr = NULL;
     if (first)
-        kind = yyjson_get_str(first);
+        kind = yyjson_mut_get_str(first);
     else
-        return;
+        return destr;
 
-    popup_add_elem(pop, "table", NULL);
     {
         Stream *stm = stm_from_block(cast(cjson, byte_t), sizeof(cjson));
         if (stm != NULL)
@@ -588,6 +683,8 @@ static void add_list_to_layout(App *app, yyjson_doc *doc, PopUp *pop, Layout *vs
             if (json != NULL && !blib_strcmp(kind, tc(json->kind)))
             {
                 Tbdata *data;
+                uint32_t hlen;
+                uint32_t vscroll_ridx = popup_count(pop);
                 Layout *table = layout_create(1, 2);
                 Layout *ops = layout_create(1, 4);
                 Layout *add_col = layout_create(4, 1);
@@ -607,9 +704,10 @@ static void add_list_to_layout(App *app, yyjson_doc *doc, PopUp *pop, Layout *vs
                 Button *query_run = button_push();
                 Edit *query_result = edit_create();
 
-                Edit *status = edit_create();
+                Edit *line = edit_create();
                 Button *open = button_push();
 
+                Font *font = font_system(font_regular_size(), 0);
                 TableView *tbview = tableview_create();
 
                 edit_phstyle(disp_name, ekFITALIC);
@@ -658,9 +756,9 @@ static void add_list_to_layout(App *app, yyjson_doc *doc, PopUp *pop, Layout *vs
                 layout_hexpand2(query_col, 0, 2, .5f);
                 layout_layout(ops, query_col, 0, 2);
 
-                edit_editable(status, FALSE);
-                edit_vpadding(status, 0);
-                layout_edit(status_row, status, 0, 0);
+                edit_editable(line, FALSE);
+                edit_vpadding(line, 0);
+                layout_edit(status_row, line, 0, 0);
 
                 button_text(open, "open");
                 layout_button(status_row, open, 1, 0);
@@ -674,45 +772,52 @@ static void add_list_to_layout(App *app, yyjson_doc *doc, PopUp *pop, Layout *vs
                 layout_tableview(table, tbview, 0, 1);
                 layout_vexpand(table, 1);
 
-                layout_insert_row(vscroll, 1);
-                layout_layout(vscroll, table, 0, 1);
+                layout_insert_row(vscroll, vscroll_ridx);
+                layout_layout(vscroll, table, 0, vscroll_ridx);
 
-                app->cls = create_destory(&data);
+                data = tb_create_destory(&destr);
+                popup_add_elem(pop, "table", NULL);
                 data->doc = doc;
-                data->jval = items;
-                data->path = arrpt_create(String);
-                data->display = arrpt_create(String);
-                data->type = arrst_create(type_t);
-                data->nrows = yyjson_arr_size(items);
-                data->primary = 0;
+                data->items = items;
+                data->nrows = yyjson_mut_arr_size(items);
                 data->freeze = 0;
+                data->status = status;
+                data->font_width = font_width(font);
+                font_destroy(&font);
                 arrst_foreach_const(col, json->cols, Column)
-                    bstd_sprintf(data->tempstr, sizeof(data->tempstr), "%s", tc(col->display));
+                    if (data->ncols == MAX_COLS)
+                    {
+                        bstd_sprintf(data->tempstr, TEMP_STR_LEN, "+ max columns (%d) exceeded", MAX_COLS);
+                        label_text(data->status, data->tempstr);
+                        log_printf("columns more than %d are dropped", MAX_COLS);
+                        break;
+                    }
+
+                    hlen = MAX(bstd_sprintf(data->tempstr, TEMP_STR_LEN, "%s", tc(col->display)), 1);
                     tableview_header_title(tbview,
                                            tableview_new_column_text(tbview),
                                            data->tempstr);
-                    tableview_header_align(tbview, data->ncols, ekCENTER);
-                    data->primary = col->primary ? data->ncols : data->primary;
-                    data->freeze = col->freeze ? data->ncols : data->freeze;
                     arrpt_append(data->path, str_copy(col->path), String);
                     arrpt_append(data->display, str_copy(col->display), String);
-                    bstd_sprintf(data->tempstr, sizeof(data->tempstr), "[%d] %s", data->ncols, tc(col->display));
-                    popup_add_elem(col_name, data->tempstr, NULL);
                     arrst_append(data->type, col->type, type_t);
-                    /* REAL32_MAX-1 isn't working as max width and 1000 is greater than panel size */
-                    tableview_column_limits(tbview, data->ncols, 20, 1000);
-                    if (col->type == ktTIM)
-                        /* can view time without cutoff with 160 */
-                        tableview_column_width(tbview, data->ncols, 160);
+
+                    bstd_sprintf(data->tempstr, TEMP_STR_LEN, "[%d] %s", data->ncols, tc(col->display));
+                    popup_add_elem(col_name, data->tempstr, NULL);
+
+                    arrst_append(data->widths, MIN(hlen, TEMP_STR_LEN), uint32_t);
+                    arrst_append(data->widths, 0, uint32_t);
+                    tableview_column_limits(tbview, data->ncols,
+                                            data->font_width * *arrst_get(data->widths, data->ncols * 2, uint32_t),
+                                            data->font_width * (TEMP_STR_LEN + 1));
+
+                    data->freeze = col->freeze ? data->ncols : data->freeze;
+
                     data->ncols++;
                 arrst_end()
 
                 tableview_OnData(tbview, listener(data, tb_OnData, Tbdata));
                 tableview_OnHeaderClick(tbview, listener(data, tb_OnHeader, Tbdata));
-                tableview_header_resizable(tbview, TRUE);
-                /* width can't be updated as a response to an event as that'll result in multiple events and
-                 expanding primary, 450 is based on longest pod name length that I see */
-                tableview_column_width(tbview, data->primary, 450);
+                tableview_header_resizable(tbview, FALSE);
                 tableview_column_freeze(tbview, data->freeze);
                 tableview_header_clickable(tbview, TRUE);
 
@@ -723,9 +828,8 @@ static void add_list_to_layout(App *app, yyjson_doc *doc, PopUp *pop, Layout *vs
 
                 data->ops = ops;
                 data->tbview = tbview;
-                data->ele = arrpt_create(yyjson_val);
                 data->invalid = TRUE;
-                data->status = status;
+                data->line = line;
 
                 tableview_update(tbview);
             }
@@ -733,50 +837,330 @@ static void add_list_to_layout(App *app, yyjson_doc *doc, PopUp *pop, Layout *vs
             stm_close(&stm);
         }
     }
+    return destr;
 }
 
 /*---------------------------------------------------------------------------*/
 
-static void add_kind_to_layout(App *app, yyjson_doc *doc, PopUp *pop, Layout *vscroll)
+static Destroyer *add_kind_to_layout(PopUp *pop, Layout *vscroll, yyjson_mut_doc *doc)
 {
     TextView *tview;
-    yyjson_val *root = yyjson_doc_get_root(doc);
+    uint32_t vscroll_ridx = popup_count(pop);
     /* TODO: should check for full GVK */
-    yyjson_val *first = yyjson_ptr_get(root, "/kind");
+    yyjson_mut_val *first = yyjson_mut_doc_ptr_get(doc, "/kind");
     const char_t *kind;
+    Destroyer *destr;
+    nodata_destroy(&destr);
     if (first)
-        kind = yyjson_get_str(first);
+        kind = yyjson_mut_get_str(first);
     else
-        return;
+        return destr;
 
     tview = textview_create();
     popup_add_elem(pop, "owner", NULL);
-    layout_insert_row(vscroll, 1);
     textview_writef(tview, kind);
-    layout_textview(vscroll, tview, 0, 1);
-    unref(app);
+    layout_insert_row(vscroll, vscroll_ridx);
+    layout_textview(vscroll, tview, 0, vscroll_ridx);
+    return destr;
 }
 
 /*---------------------------------------------------------------------------*/
 
-void populate_listbox(App *app, Layout *vscroll, const char_t *cmdout, uint32_t len)
+static void ft_destroy(Ftdata **data)
 {
-    yyjson_doc *doc = yyjson_read_opts(cast(cmdout, char_t), len, 0, app->alc, NULL);
+    /* just a guard */
+    if ((*data)->proc)
+    {
+        bproc_cancel((*data)->proc);
+        bproc_close(&(*data)->proc);
+        cassert_msg(FALSE, "did not expect a process to be running");
+    }
+    heap_delete(data, Ftdata);
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void ft_destroy_clr(const Destroyer *context)
+{
+    Ftdata *data = cast(context->data, Ftdata);
+    context->func_destroy(dcast(&data, void));
+}
+
+/*---------------------------------------------------------------------------*/
+
+static Ftdata *ft_create_destroy(Destroyer **destr)
+{
+    Ftdata *data = heap_new0(Ftdata);
+    *destr = heap_new(Destroyer);
+    FUNC_CHECK_DESTROY(ft_destroy, Ftdata);
+    FUNC_CHECK_CLOSURE(ft_destroy_clr, Destroyer);
+    (*destr)->data = data;
+    (*destr)->func_destroy = (FPtr_destroy)ft_destroy;
+    (*destr)->func_closure = (FPtr_closure)ft_destroy_clr;
+    return data;
+}
+
+/*---------------------------------------------------------------------------*/
+static uint32_t bg_proc_main(Ftdata *data)
+{
+    bproc_wait_exit(&data->proc);
+    return 0;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_run_update(Ftdata *data)
+{
+    perror_t out, err;
+    bool_t read0 = TRUE;
+    if (data->run_state != ktRUN_INPROGRESS)
+    {
+        return;
+    }
+    else if (data->stop)
+    {
+        bproc_cancel(data->proc);
+        bproc_close(&data->proc);
+        data->run_state = ktRUN_CANCEL;
+        return;
+    }
+
+    if (bproc_read(data->proc, data->read_buf, READ_BUFFER - 1, &data->rsize, &out))
+    {
+        data->read_buf[data->rsize] = '\0';
+        data->tot_len += data->rsize;
+        textview_color(data->tview, kCOLOR_DEFAULT);
+        textview_writef(data->tview, cast(data->read_buf, char_t));
+        read0 = FALSE;
+    }
+
+    if (bproc_eread(data->proc, data->read_buf, READ_BUFFER - 1, &data->rsize, &err))
+    {
+        data->read_buf[data->rsize] = '\0';
+        data->tot_len += data->rsize;
+        textview_color(data->tview, kCOLOR_RED);
+        textview_writef(data->tview, cast(data->read_buf, char_t));
+        read0 = FALSE;
+    }
+
+    if (read0 && out != ekPAGAIN && err != ekPAGAIN)
+    {
+        bproc_close(&data->proc);
+        data->run_state = ktRUN_COMPLETE;
+    }
+    else if (data->tot_len > READ_BUFFER)
+    {
+        data->stop = TRUE;
+    }
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_run_end(Ftdata *data, const uint32_t rval)
+{
+    /* reset state */
+    edit_editable(data->cmdin, TRUE);
+    button_text(data->run, bt_run);
+    data->stop = FALSE;
+    if (data->run_state == ktRUN_COMPLETE)
+    {
+        label_text(data->status, st_completed);
+    }
+    else if (data->run_state == ktRUN_CANCEL)
+    {
+        label_text(data->status, st_stopped);
+    }
+    else
+    {
+        label_text(data->status, st_unknown);
+    }
+    data->run_state = ktRUN_ENDED;
+    lock_view(data->locker, FALSE);
+    unref(rval);
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_OnRun(Ftdata *data, Event *e)
+{
+    if (data->run_state == ktRUN_ENDED)
+    {
+        const char_t *cmdin = edit_get_text(data->cmdin);
+        data->tot_len = 0;
+        textview_color(data->tview, kCOLOR_DEFAULT);
+        textview_clear(data->tview);
+        label_text(data->status, st_ready);
+
+        if (cmdin && cmdin[0])
+        {
+            char_t *json;
+            size_t len;
+            yyjson_write_err err;
+            label_text(data->status, st_running);
+            if (button_get_state(data->jptr) == ekGUI_ON)
+            {
+                /* TODO: recheck if we need to guard interface elements as below might not probably be slow vs running a new process */
+                yyjson_ptr_err perr;
+                yyjson_mut_val *jptr = yyjson_mut_doc_ptr_getx(data->mdoc, cmdin, blib_strlen(cmdin), NULL, &perr);
+                if (perr.code == YYJSON_PTR_ERR_NONE)
+                {
+                    json = yyjson_mut_val_write_opts(jptr, YYJSON_WRITE_PRETTY_TWO_SPACES, data->alc, &len, &err);
+                    if (err.code == YYJSON_WRITE_SUCCESS)
+                    {
+                        if (len > READ_BUFFER)
+                        {
+                            json[READ_BUFFER] = '\0';
+                            label_text(data->status, st_stopped);
+                        }
+                        else
+                        {
+                            label_text(data->status, st_completed);
+                        }
+                        textview_writef(data->tview, json);
+                    }
+                }
+                else
+                {
+                    textview_color(data->tview, kCOLOR_RED);
+                    textview_writef(data->tview, perr.msg);
+                    label_text(data->status, st_stopped);
+                }
+            }
+            else
+            {
+                lock_view(data->locker, TRUE);
+                /* TODO: track if the buffer is changed or not */
+                json = yyjson_mut_write_opts(data->mdoc, YYJSON_WRITE_NOFLAG, data->alc, &len, &err);
+                cassert_msg(err.code == 0, "this is a parsed buf and shouldn't fail and size should be within limits");
+
+                data->proc = bproc_exec(cmdin, NULL);
+                {
+                    uint32_t times = len / (READ_BUFFER - 1);
+                    uint32_t remain = len % (READ_BUFFER - 1);
+                    bool_t stop_write = FALSE;
+                    while (times--)
+                    {
+                        if (bproc_write(data->proc, cast(json, byte_t), READ_BUFFER - 1, NULL, NULL) == FALSE)
+                        {
+                            stop_write = TRUE;
+                            break;
+                        }
+                        json = json + (sizeof(char_t) * (READ_BUFFER - 1));
+                    }
+                    if (!stop_write && remain)
+                        bproc_write(data->proc, cast(json, byte_t), remain, NULL, NULL);
+                }
+                data->run_state = ktRUN_INPROGRESS;
+                bproc_write_close(data->proc);
+                edit_editable(data->cmdin, FALSE);
+                button_text(data->run, bt_stop);
+                osapp_task(data, 0., bg_proc_main, i_run_update, i_run_end, Ftdata);
+            }
+        }
+    }
+    else
+    {
+        data->stop = TRUE;
+        label_text(data->status, st_stopping);
+    }
+    unref(e);
+}
+
+/*---------------------------------------------------------------------------*/
+
+static Destroyer *add_filter_to_layout(PopUp *pop, Layout *vscroll, opsv *locker, yyjson_mut_doc *mdoc, byte_t *buf, uint32_t bsize, Label *status)
+{
+    Ftdata *data;
+    Destroyer *destr;
+    uint32_t vscroll_ridx = popup_count(pop);
+
+    Layout *filter = layout_create(1, 2);
+    Layout *cmd = layout_create(2, 1);
+    Layout *ops = layout_create(1, 2);
+
+    Edit *cmdin = edit_multiline();
+
+    Button *run = button_push();
+    Button *jptr = button_check();
+
+    TextView *tview = textview_create();
+
+    edit_phstyle(cmdin, ekFITALIC);
+    edit_phtext(cmdin, "compacted json will be supplied to stdin of this command.");
+    layout_edit(cmd, cmdin, 0, 0);
+
+    button_text(run, bt_run);
+    layout_button(ops, run, 0, 0);
+
+    button_text(jptr, "jsonpointer");
+    layout_button(ops, jptr, 0, 1);
+
+    layout_hexpand(cmd, 0);
+    layout_layout(cmd, ops, 1, 0);
+    layout_layout(filter, cmd, 0, 0);
+
+    layout_vsize(filter, 0, 50);
+
+    textview_show_select(tview, TRUE);
+    textview_wrap(tview, TRUE);
+    textview_fstyle(tview, ekFITALIC);
+    textview_writef(tview, info);
+    textview_fstyle(tview, ekFNORMAL);
+    layout_textview(filter, tview, 0, 1);
+    layout_vexpand(filter, 1);
+
+    layout_insert_row(vscroll, vscroll_ridx);
+    layout_layout(vscroll, filter, 0, vscroll_ridx);
+    popup_add_elem(pop, "filter", NULL);
+
+    data = ft_create_destroy(&destr);
+    data->cmdin = cmdin;
+    data->jptr = jptr;
+    data->run = run;
+    data->tview = tview;
+    data->run_state = ktRUN_ENDED;
+    data->locker = locker;
+    data->mdoc = mdoc;
+    data->status = status;
+    /* TODO: no need to free explicitly? */
+    yyjson_alc_pool_init(data->alc, buf, bsize);
+
+    button_OnClick(data->run, listener(data, i_OnRun, Ftdata));
+
+    return destr;
+}
+
+/*---------------------------------------------------------------------------*/
+
+void populate_views(App *app)
+{
+    yyjson_doc *doc = yyjson_read_opts(cast(app->parse_buf, char_t), app->out_len, YYJSON_READ_INSITU, app->alc, NULL);
     if (doc)
     {
-        yyjson_val *root = yyjson_doc_get_root(doc);
-        yyjson_val *kind = yyjson_ptr_get(root, "/kind");
-        PopUp *pop = app->vselect;
+        yyjson_val *kind = yyjson_doc_ptr_get(doc, "/kind");
+        Destroyer *destr;
         if (kind)
         {
+            yyjson_mut_doc *mdoc = yyjson_doc_mut_copy(doc, app->alc);
+            /* TODO: move the params to a shared struct after some point, let's say after 7 params? */
             if (!blib_strcmp(yyjson_get_str(kind), "List"))
-                add_list_to_layout(app, doc, pop, vscroll);
+            {
+                destr = add_list_to_layout(app->vselect, app->vscroll, mdoc, app->status);
+                cassert_no_null(destr);
+                arrpt_append(app->views, destr, Destroyer);
+            }
             else
-                add_kind_to_layout(app, doc, pop, vscroll);
+            {
+                destr = add_kind_to_layout(app->vselect, app->vscroll, mdoc);
+                cassert_no_null(destr);
+                arrpt_append(app->views, destr, Destroyer);
+            }
+            destr = add_filter_to_layout(app->vselect, app->vscroll, app->locker, mdoc, app->parse_buf, app->parse_size, app->status);
+            cassert_no_null(destr);
+            arrpt_append(app->views, destr, Destroyer);
+            app->doc = mdoc;
         }
-        /* no row is added */
-        if (layout_nrows(vscroll) < 2)
-            yyjson_doc_free(doc);
+        yyjson_doc_free(doc);
     }
 }
 

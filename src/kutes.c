@@ -1,23 +1,23 @@
 #include "kt.h"
+
 #include <yyjson.h>
 #include <nappgui.h>
 
 /*---------------------------------------------------------------------------*/
 
-const char_t *st_ready = "⌘ ready";         /* U+2318*/
-const char_t *st_running = "⏳running";     /* U+23f3 */
-const char_t *st_stopping = "⌛stopping";   /* U+231b */
-const char_t *st_stopped = "✕ stopped";     /* U+2715 */
-const char_t *st_completed = "✓ completed"; /* U+2713 */
-const char_t *st_unknown = "? unknown";
+struct _inops_t
+{
+    Cell *c1;
+    Cell *c2;
+};
 
-const char_t *bt_run = "&run";
-const char_t *bt_stop = "&stop";
-const char_t *bt_wrap = "&wrap";
-const char_t *bt_tail = "&tail";
-const char_t *bt_err_search = "std&err";
+/*---------------------------------------------------------------------------*/
 
-const char_t *info = "\
+static const char_t *bt_wrap = "&wrap";
+static const char_t *bt_tail = "&tail";
+static const char_t *bt_err_search = "std&err";
+
+static const char_t *info = "\
 only last 512 KiB of stdout data is displayed here.\n\n\
 checking 'stderr' searches stderr text or 'stdout' by default.\n\n\
 'noshow' suppresses stdout display but still stored for parsing.\n\n\
@@ -119,9 +119,11 @@ static void i_run_end(App *app, const uint32_t rval)
         app->run_state = ktRUN_ENDED;
         /* 119 is empty resource list */
         if (app->out_len > 119 && (app->nolimit || app->out_len < INITIAL_PARSE_SIZE))
-            /* TODO: do not supply "app" only send a pointer for registering closures */
-            populate_listbox(app, app->vscroll, cast(app->parse_buf, char_t), app->out_len);
+        {
+            populate_views(app);
+        }
     }
+
     else if (app->run_state == ktRUN_CANCEL)
     {
         label_text(app->status, st_stopped);
@@ -136,12 +138,21 @@ static void i_run_end(App *app, const uint32_t rval)
 
 /*---------------------------------------------------------------------------*/
 
+static void viewdata_destroy(Destroyer **destr)
+{
+    if ((*destr)->func_closure)
+        (*destr)->func_closure(*destr);
+    heap_delete(destr, Destroyer);
+}
+
+/*---------------------------------------------------------------------------*/
+
 static void i_OnRun(App *app, Event *e)
 {
     if (app->run_state == ktRUN_ENDED)
     {
         const char_t *cmdin;
-        uint32_t current, total = popup_count(app->vselect);
+        uint32_t total = popup_count(app->vselect);
         cmdin = edit_get_text(app->cmdin);
 
         label_text(app->status, st_ready);
@@ -156,19 +167,21 @@ static void i_OnRun(App *app, Event *e)
         popup_selected(app->vselect, 0);
         layout_show_row(app->vscroll, 0, TRUE);
         layout_update(app->vscroll);
-        for (current = 1; current < total; current++)
+        while ((total--) > 1)
         {
             /* TODO: we can reuse the layout rather than adding & removing continuosuly
             as it allocates and deallocates memory considerably */
-            popup_del_elem(app->vselect, current);
+            popup_del_elem(app->vselect, 1);
+            if (arrpt_size(app->views, Destroyer))
+                arrpt_pop(app->views, viewdata_destroy, Destroyer);
             layout_remove_row(app->vscroll, 1);
-            if (app->cls)
-            {
-                app->cls->func_closure(app->cls);
-                heap_delete(&app->cls, Closure);
-            }
         }
         layout_update(app->vscroll);
+        if (app->doc)
+        {
+            yyjson_mut_doc_free(app->doc);
+            app->doc = NULL;
+        }
 
         if (cmdin && cmdin[0])
         {
@@ -371,6 +384,14 @@ static void i_OnSearchFocus(App *app, Event *e)
 
 /*---------------------------------------------------------------------------*/
 
+void lock_view(opsv *locker, bool_t lock)
+{
+    cell_enabled(locker->c1, !lock);
+    cell_enabled(locker->c2, !lock);
+}
+
+/*---------------------------------------------------------------------------*/
+
 static void i_OnPopupSelect(App *app, Event *e)
 {
     const EvButton *p = event_params(e, EvButton);
@@ -526,6 +547,9 @@ static Panel *i_panel(App *app)
     app->cmdout = cmdout;
     app->cmderr = cmderr;
     app->status = status;
+    app->locker = heap_new(opsv);
+    app->locker->c1 = layout_cell(inops, 0, 0);
+    app->locker->c2 = layout_cell(inops, 1, 0);
 
     return panel;
 }
@@ -555,9 +579,11 @@ static App *i_create(void)
     app->pos_cache = arrst_create(uint32_t);
     app->run_state = ktRUN_ENDED;
     app->alc = alc_init("yyjson");
-    app->parse_size = INITIAL_PARSE_SIZE + READ_BUFFER;
+    app->parse_size = INITIAL_PARSE_SIZE + READ_BUFFER + YYJSON_PADDING_SIZE;
     app->parse_buf = heap_new_n(app->parse_size, byte_t);
     app->nolimit = FALSE;
+    app->doc = NULL;
+    app->views = arrpt_create(Destroyer);
     cols_bind();
 
     window_panel(app->window, panel);
@@ -572,16 +598,14 @@ static App *i_create(void)
 
 static void i_destroy(App **app)
 {
-    if ((*app)->cls != NULL)
-    {
-        (*app)->cls->func_closure((*app)->cls);
-        heap_delete(&(*app)->cls, Closure);
-    }
+    if ((*app)->doc)
+        yyjson_mut_doc_free((*app)->doc);
+    arrpt_destroy(&(*app)->views, viewdata_destroy, Destroyer);
     arrst_destroy(&(*app)->pos_cache, NULL, uint32_t);
-
     heap_delete_n(&(*app)->parse_buf, (*app)->parse_size, byte_t);
     window_destroy(&(*app)->window);
     alc_dest(&(*app)->alc);
+    heap_delete(&(*app)->locker, opsv);
     heap_delete(app, App);
 }
 

@@ -4,6 +4,10 @@
 */
 #include <kt.h>
 
+#include <yyjson.h>
+
+#define MAX_NAME_LEN 10
+
 typedef struct _addr_t addr;
 typedef struct _context_t context;
 
@@ -16,7 +20,7 @@ DeclSt(addr);
 
 struct _context_t
 {
-    char_t name[10];
+    char_t name[MAX_NAME_LEN];
     SetSt(addr) *set;
 };
 
@@ -88,7 +92,7 @@ yyjson_alc *alc_init(const char_t *name)
     alc->realloc = sdk_realloc;
     alc->free = sdk_free;
 
-    str_copy_c(ct->name, sizeof(ct->name), name);
+    str_copy_c(ct->name, MAX_NAME_LEN, name);
     ct->set = setst_create(addr_cmp, addr);
     alc->ctx = ct;
     return alc;

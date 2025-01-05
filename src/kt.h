@@ -27,17 +27,19 @@ typedef enum _run_t
     ktRUN_ENDED
 } run_t;
 
-typedef struct _closure_t Closure;
-typedef void (*FPtr_closure)(const Closure *context);
+typedef struct _destroyer_t Destroyer;
+typedef void (*FPtr_closure)(const Destroyer *context);
 #define FUNC_CHECK_CLOSURE(func, type) \
     (void)((void (*)(const type *))func == func)
-struct _closure_t
+struct _destroyer_t
 {
     void *data;
     FPtr_destroy func_destroy;
     FPtr_closure func_closure;
 };
+DeclPt(Destroyer);
 
+typedef struct _inops_t opsv;
 typedef struct _app_t App;
 struct _app_t
 {
@@ -61,6 +63,7 @@ struct _app_t
     TextView *cmdout;
     TextView *cmderr;
     Label *status;
+    opsv *locker;
 
     /* state */
     const char_t *start_ptr;
@@ -77,14 +80,29 @@ struct _app_t
     bool_t nolimit;
 
     /* child data */
-    Closure *cls;
+    yyjson_mut_doc *doc;
     yyjson_alc *alc;
+
+    ArrPt(Destroyer) *views;
 };
 
-/*---------------------------------------------------------------------------*/
+extern char_t const *st_ready;
+extern char_t const *st_running;
+extern char_t const *st_stopping;
+extern char_t const *st_stopped;
+extern char_t const *st_completed;
+extern char_t const *st_unknown;
+extern char_t const *bt_run;
+extern char_t const *bt_stop;
 
-void populate_listbox(App *, Layout *, const char_t *, uint32_t);
-void adjust_vscroll(Layout *, const uint32_t, const uint32_t);
+/*---------------------------------------------------------------------------*/
+/* TODO: probably the worst api, relook */
+void lock_view(opsv *, bool_t);
+/* TODO: end */
+
+/* TODO: populate_views should eventually accept a shared struct for all the views */
+void populate_views(App *);
+void adjust_vscroll(Layout *, const uint32_t selected, const uint32_t total);
 void cols_bind(void);
 
 yyjson_alc *alc_init(const char_t *name);
