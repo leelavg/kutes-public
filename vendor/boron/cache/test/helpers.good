@@ -1,0 +1,13 @@
+---- split-path
+[%path/to/ %file]
+[none %some-file]
+[%C:/windows/ %file]
+---- replace
+"comma separated,words,"
+"comma separated words "
+"comma-->separated-->words-->"
+{include: \"\"}
+---- funct
+Found lval 2.
+6
+false false

@@ -1,0 +1,13 @@
+---- basic
+char! a
+'a'
+---- escape seq
+['^0' '^D' '^-' '^/' '^^' '^'']
+size? b: 6
+first line 
+ 	 second line
+---- escape hex
+['©' '¶' 'й' '∋']
+© ¶ й ∋
+©¶й∋
+['^(A9)' '^(B6)' '^(0439)' '^(220B)']

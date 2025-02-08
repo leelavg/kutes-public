@@ -1,0 +1,22 @@
+---- not found
+["a bit of time"]
+["heel-on-shoe"]
+[#{CC00DEAD00BEEF}]
+[[blk | of time | blah]]
+---- normal
+["a" "bit" "of" "time"]
+["heel" "on" "shoe"]
+[#{CC} #{DEAD} #{BEEF}]
+[[blk] [of time] [blah]]
+---- subsequent delim
+["A" "Bee" "C"]
+["a" "bit" "of" "time"]
+["heel" "on" "shoe"]
+[#{CC} #{DEAD} #{BEEF}]
+[[blk] [of time] [blah]]
+---- keep
+["A" "Bee" "" "" "C"]
+["" "" "a" "" "bit" "" "" "of" "" "time" "" ""]
+["" "" "heel" "" "on" "" "" "shoe" "" "" ""]
+[#{} #{} #{CC} #{} #{DEAD} #{} #{} #{BEEF} #{} #{}]
+[[] [] [blk] [] [of time] [] [] [blah] [] []]

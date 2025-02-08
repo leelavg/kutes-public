@@ -245,7 +245,8 @@ static color_t i_frame_color(GtkWidget *widget, const uint32_t size, const bool_
 static void i_precompute_colors(void)
 {
     real32_t r = 0, g = 0, b = 0;
-    cassert(kLABEL_COLOR == 0);
+    /* TODO: should be scheme aware */
+    /* cassert(kLABEL_COLOR == 0); */
     cassert(i_IMPOSTOR_MAPPED == TRUE);
     kLABEL_COLOR = i_color_prop(kLABEL, "color", GTK_STATE_FLAG_ACTIVE);
     kVIEW_COLOR = i_color_prop(kWINDOW, "background-color", GTK_STATE_FLAG_NORMAL);
@@ -544,29 +545,25 @@ color_t osglobals_color(const syscolor_t *color)
     cassert_no_null(color);
     cassert(kWINDOW != NULL);
 
+    /* TODO: should be scheme aware */
     switch (*color)
     {
     case ekSYSCOLOR_DARKMODE:
         return kDARK_MODE;
 
     case ekSYSCOLOR_LABEL:
-        cassert(kLABEL_COLOR != 0);
         return kLABEL_COLOR;
 
     case ekSYSCOLOR_VIEW:
-        cassert(kVIEW_COLOR != 0);
         return kVIEW_COLOR;
 
     case ekSYSCOLOR_LINE:
-        cassert(kLINE_COLOR != 0);
         return kLINE_COLOR;
 
     case ekSYSCOLOR_LINK:
-        cassert(kLINK_COLOR != 0);
         return kLINK_COLOR;
 
     case ekSYSCOLOR_BORDER:
-        cassert(kBORD_COLOR != 0);
         return kBORD_COLOR;
 
         cassert_default();
@@ -587,6 +584,12 @@ void osglobals_resolution(const void *non_used, real32_t *width, real32_t *heigh
         GdkDisplay *display = gdk_display_get_default();
         GdkMonitor *primary_monitor = gdk_display_get_primary_monitor(display);
         GdkRectangle monitor_geometry;
+        if (!primary_monitor)
+        {
+            /* probably wayland, https://discourse.gnome.org/t/get-screen-width-and-height/7245/11 */
+            GdkWindow *window = gdk_get_default_root_window();
+            primary_monitor = gdk_display_get_monitor_at_window(display, window);
+        }
         gdk_monitor_get_geometry(primary_monitor, &monitor_geometry);
         *width = (real32_t)monitor_geometry.width;
         *height = (real32_t)monitor_geometry.height;
@@ -1341,4 +1344,11 @@ void _osglobals_restore_focus(GtkWidget *window, GtkWidget *widget)
 {
     kRESTORE_FOCUS_WINDOW = window;
     kRESTORE_FOCUS_WIDGET = widget;
+}
+
+/*---------------------------------------------------------------------------*/
+
+void osglobals_theme_changed(void)
+{
+    i_precompute_colors();
 }

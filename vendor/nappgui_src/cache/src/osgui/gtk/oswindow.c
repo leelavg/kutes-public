@@ -27,7 +27,7 @@
 #include <core/arrst.h>
 #include <core/event.h>
 #include <core/heap.h>
-#include <sewer/blib.h>
+#include <core/strings.h>
 #include <sewer/cassert.h>
 
 #if !defined(__GTK3__)
@@ -37,6 +37,7 @@
 struct _oswindow_t
 {
     OSControl control;
+    GtkWidget *header;
     OSMenu *menu;
     GMainLoop *runloop;
     uint32_t modal_return;
@@ -122,6 +123,7 @@ static gboolean i_OnConfigure(GtkWidget *widget, GdkEventConfigure *event, OSWin
         return FALSE;
     }
 
+    /* TODO: Wayland will skip some resize events https://github.com/rust-windowing/winit/issues/2499#issuecomment-1292193225 */
     if (window->current_width > 0 && (window->current_width != event->width || window->current_height != event->height))
     {
         if (window->is_resizable == TRUE && window->OnResize != NULL)
@@ -290,7 +292,6 @@ static ___INLINE GtkWidget *i_gtk_window(const uint32_t flags)
     else
     {
         window = gtk_application_window_new(i_GTK_APP);
-        gtk_window_set_decorated(GTK_WINDOW(window), (flags & ekWINDOW_TITLE) ? TRUE : FALSE);
     }
 
     return window;
@@ -356,6 +357,38 @@ OSWindow *oswindow_create(const uint32_t flags)
         gtk_window_set_icon(GTK_WINDOW(window->control.widget), i_APP_ICON);
     }
 
+    {
+        GdkDisplay *display = gdk_display_get_default();
+        const char_t *name = gdk_display_get_name(display);
+        if (str_is_prefix(name, "wayland"))
+        {
+            /*
+                Intentionally FALSE here as CSD seems quite tough to accomplish.
+                Setting it to TRUE works for initial view but resize will not work.
+             */
+            gtk_window_set_decorated(GTK_WINDOW(window->control.widget), FALSE);
+
+            window->header = gtk_header_bar_new();
+            {
+                const char *css = "headerbar { border: 0; min-height: 0; } window { border-radius: 5px 5px 0px 0px; }";
+                GtkCssProvider *css_provider = gtk_css_provider_new();
+                GtkStyleContext *style_context = gtk_widget_get_style_context(window->header);
+                gtk_css_provider_load_from_data(css_provider, css, -1, NULL);
+                gtk_style_context_add_provider(style_context, GTK_STYLE_PROVIDER(css_provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+                gtk_header_bar_set_subtitle(GTK_HEADER_BAR(window->header), 0);
+                gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(window->header), 1);
+                gtk_window_set_titlebar(GTK_WINDOW(window->control.widget), window->header);
+
+                style_context = gtk_widget_get_style_context(window->control.widget);
+                gtk_style_context_add_provider(style_context, GTK_STYLE_PROVIDER(css_provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+            }
+        }
+        else
+        {
+            gtk_window_set_decorated(GTK_WINDOW(window->control.widget), flags & ekWINDOW_TITLE);
+        }
+    }
     return window;
 }
 
@@ -424,7 +457,15 @@ void oswindow_destroy(OSWindow **window)
     listener_destroy(&(*window)->OnClose);
     _oswindow_hotkey_destroy(&(*window)->hotkeys);
     _ostabstop_remove(&(*window)->tabstop);
-    cassert(i_num_children(GTK_CONTAINER((*window)->control.widget)) == 1);
+    if ((*window)->header)
+    {
+        cassert(i_num_children(GTK_CONTAINER((*window)->control.widget)) == 2);
+        gtk_widget_destroy((*window)->header);
+    }
+    else
+    {
+        cassert(i_num_children(GTK_CONTAINER((*window)->control.widget)) == 1);
+    }
     cassert(i_num_children(GTK_CONTAINER(gtk_bin_get_child(GTK_BIN((*window)->control.widget)))) == 0);
     g_object_unref((*window)->control.widget);
     heap_delete(window, OSWindow);
@@ -459,7 +500,10 @@ void oswindow_OnClose(OSWindow *window, Listener *listener)
 void oswindow_title(OSWindow *window, const char_t *text)
 {
     cassert_no_null(window);
-    gtk_window_set_title(GTK_WINDOW(window->control.widget), cast_const(text, gchar));
+    if (window->header)
+        gtk_header_bar_set_title(GTK_HEADER_BAR(window->header), cast_const(text, gchar));
+    else
+        gtk_window_set_title(GTK_WINDOW(window->control.widget), cast_const(text, gchar));
 }
 
 /*---------------------------------------------------------------------------*/
@@ -631,6 +675,8 @@ void oswindow_launch(OSWindow *window, OSWindow *parent_window)
         window->role = ekGUI_ROLE_MAIN;
     }
 
+    /* if (window->header)
+        gtk_widget_show(window->header); */
     gtk_widget_show(window->control.widget);
     _ostabstop_restore(&window->tabstop);
 }
@@ -761,20 +807,7 @@ static void i_update_menu_size(OSWindow *window)
 
 void oswindow_size(OSWindow *window, const real32_t width, const real32_t height)
 {
-    real32_t wt = width;
-    real32_t ht = height;
-    char *backend = getenv("GDK_BACKEND");
-
     cassert_no_null(window);
-    if (backend == NULL)
-        backend = getenv("XDG_SESSION_TYPE");
-
-    if (!blib_strcmp(backend, "wayland"))
-    {
-        wt += 50;
-        ht += 89;
-    }
-
     if (window->is_resizable == TRUE)
     {
         window->resize_event = FALSE;
@@ -786,7 +819,7 @@ void oswindow_size(OSWindow *window, const real32_t width, const real32_t height
     }
     else
     {
-        gtk_widget_set_size_request(window->control.widget, (gint)wt, (gint)ht);
+        gtk_widget_set_size_request(window->control.widget, (gint)width, (gint)height);
     }
 
     i_update_menu_size(window);

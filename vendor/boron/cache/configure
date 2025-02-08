@@ -1,0 +1,128 @@
+#!/bin/bash
+
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  echo "Configuration Options:"
+  echo "  -h, --help      Display this help and exit"
+  echo -e "\nRemove Standard Features:"
+  echo "  --no-checksum   Remove the checksum function"
+  echo "  --no-compress   Remove the compress function"
+  echo "  --no-execute    Remove the execute function"
+  echo "  --no-random     Remove the random function"
+  echo "  --no-readline   Remove console editing and history"
+  echo "  --no-socket     Remove the socket port"
+  echo -e "\nAdd Optional Features:"
+  echo "  --assemble      Enable assemble function (requires libjit)"
+  echo "  --bzip2         Use bzip2 for compress instead of zlib"
+  echo "  --gnu-readline  Use GNU Readline for console editing and history"
+  echo "  --static        Build static library and stand-alone executable"
+  echo "  --timecode      Enable timecode! datatype"
+  echo "  --thread        Enable thread functions"
+  echo -e "\nSet Default Limits:"
+  echo "  --atom-limit <N>  Maximum number of atoms"
+  echo "  --atom-names <N>  Atom names buffer size"
+  exit
+fi
+
+
+CFG_ASSEM=0
+CFG_CHECKSUM=1
+CFG_COMPRESS=zlib
+CFG_EXECUTE=1
+CFG_RANDOM=1
+CFG_READLINE=linenoise
+CFG_SOCKET=1
+CFG_STATIC=0
+CFG_TIMECODE=0
+CFG_THREAD=0
+CFG_ATOM_LIMIT=none
+CFG_ATOM_NAMES=none
+
+while [ "$1" != "" ]; do
+  case $1 in
+    --no-checksum)
+      CFG_CHECKSUM=0 ;;
+    --no-compress)
+      CFG_COMPRESS=0 ;;
+    --no-execute)
+      CFG_EXECUTE=0 ;;
+    --no-random)
+      CFG_RANDOM=0 ;;
+    --no-readline)
+      CFG_READLINE=0 ;;
+    --no-socket)
+      CFG_SOCKET=0 ;;
+    --assemble)
+      CFG_ASSEM=1 ;;
+    --bzip2)
+      CFG_COMPRESS=bzip2 ;;
+    --gnu-readline)
+      CFG_READLINE=gnu ;;
+    --static)
+      CFG_STATIC=1 ;;
+    --timecode)
+      CFG_TIMECODE=1 ;;
+    --thread)
+      CFG_THREAD=1 ;;
+    --atom-limit)
+      shift
+      CFG_ATOM_LIMIT=$1 ;;
+    --atom-names)
+      shift
+      CFG_ATOM_NAMES=$1 ;;
+    *)
+      echo "Invalid option $opt"
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+
+echo "Generating config.opt & project.config"
+rm -f config.opt project.config
+
+function m2-word {
+if [ $2 = 0 ]; then
+  echo "$1: false" >> project.config
+else
+  echo "$1: '$2" >> project.config
+  case $2 in
+    gnu)
+	  echo -n " -DCONFIG_READLINE" >> config.opt ;;
+    linenoise)
+	  echo -n " -DCONFIG_LINENOISE" >> config.opt ;;
+    zlib)
+	  echo -n " -DCONFIG_COMPRESS=1" >> config.opt ;;
+    bzip2)
+	  echo -n " -DCONFIG_COMPRESS=2" >> config.opt ;;
+  esac
+fi
+}
+function m2-logic {
+if [ $2 = 0 ]; then
+  echo "$1: false" >> project.config
+else
+  echo "$1: true" >> project.config
+  echo -n " -DCONFIG_$(tr '[:lower:]' '[:upper:]' <<< $1)" >> config.opt
+fi
+}
+function m2-int {
+if [ $2 != 'none' ]; then
+  echo "$1: $2" >> project.config
+  echo -n " -DCONFIG_$(tr '[:lower:]' '[:upper:]' <<< $1)=$2" >> config.opt
+fi
+}
+
+m2-logic "assemble" $CFG_ASSEM
+m2-logic "checksum" $CFG_CHECKSUM
+m2-word  "compress" $CFG_COMPRESS
+m2-logic "hashmap"  1
+m2-logic "execute"  $CFG_EXECUTE
+m2-logic "random"   $CFG_RANDOM
+m2-word  "readline" $CFG_READLINE
+m2-logic "socket"   $CFG_SOCKET
+m2-logic "static"   $CFG_STATIC
+m2-logic "timecode" $CFG_TIMECODE
+m2-logic "thread"   $CFG_THREAD
+m2-int   "atom-limit" $CFG_ATOM_LIMIT
+m2-int   "atom-names" $CFG_ATOM_NAMES

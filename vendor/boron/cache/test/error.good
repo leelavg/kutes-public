@@ -1,0 +1,20 @@
+---- trace format
+Script Error: Unset word 'b
+Trace:
+ -> add b a "ok"
+ -> f 3
+ -> top
+---- error func
+Script Error: Test error
+Script Error: number (22) is bigger than 5
+Trace:
+ -> fe 22
+---- error compare
+true
+false
+---- stack overflow
+Script Error: Stack overflow
+Trace:
+ -> if lt? x 2 [return 1]
+ -> mul x factorial sub x 1
+ ...

@@ -1,0 +1,21 @@
+Fix gui resolution getter for wayland
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/src/osgui/gtk/osglobals.c b/src/osgui/gtk/osglobals.c
+index 0e37267..2995b45 100644
+--- a/src/osgui/gtk/osglobals.c
++++ b/src/osgui/gtk/osglobals.c
+@@ -587,6 +587,12 @@ void osglobals_resolution(const void *non_used, real32_t *width, real32_t *heigh
+         GdkDisplay *display = gdk_display_get_default();
+         GdkMonitor *primary_monitor = gdk_display_get_primary_monitor(display);
+         GdkRectangle monitor_geometry;
++        if (!primary_monitor)
++        {
++            /* probably wayland, https://discourse.gnome.org/t/get-screen-width-and-height/7245/11 */
++            GdkWindow *window = gdk_get_default_root_window();
++            primary_monitor = gdk_display_get_monitor_at_window(display, window);
++        }
+         gdk_monitor_get_geometry(primary_monitor, &monitor_geometry);
+         *width = (real32_t)monitor_geometry.width;
+         *height = (real32_t)monitor_geometry.height;

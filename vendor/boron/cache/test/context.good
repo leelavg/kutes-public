@@ -1,0 +1,58 @@
+---- bind
+2 two
+2 two
+---- get
+1
+"two"
+none
+[2 "two" func [a][bind a 'b]]
+---- proto
+context [
+    first: 1
+    second: 2
+]
+context [
+    first: 1
+    second: 2
+    third: 3
+]
+[first second third]
+[1 2 3]
+---- infuse
+[nest (2 "two" c d)]
+context [
+    first: "one"
+    second: "two"
+]
+---- append
+context [
+    a: 1
+    b: 2
+    extra: 3.0
+]
+---- print recursion
+context [
+    a: 1
+    b: context [
+        a: 2
+        b: ~context!~
+    ]
+]
+---- self
+1 2
+context [
+    f: does [self/v]
+    v: 1
+]
+---- self override
+override
+override
+---- bind/secure
+Script Error: unbound word 'read
+Trace:
+ -> low: 2 high: read %/tmp/config
+ -> do bind/secure [low: 2 high: read %/tmp/config] sc
+context [
+    high: none
+    low: 2
+]

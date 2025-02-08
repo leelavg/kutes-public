@@ -1,0 +1,42 @@
+---- if
+same
+none
+equal
+none
+"2 < 3"
+none
+"4 > 2"
+none
+---- either
+yes
+no
+eval-yes
+e-yes
+e-no
+---- all
+true
+false
+true
+false
+---- any
+true
+false
+true
+false
+---- switch
+one
+default
+---- while
+3
+2
+1
+false
+3
+4
+5
+Done
+~unset!~
+---- case
+integer > 2
+operator ^
+word box

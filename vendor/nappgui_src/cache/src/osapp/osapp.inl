@@ -37,6 +37,8 @@ void _osapp_terminate_imp(
 
 uint32_t _osapp_argc_imp(OSApp *app);
 
+void _osapp_theme_invert_imp(OSApp *app, bool_t invert);
+
 uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const uint32_t max_size);
 
 void _osapp_run(OSApp *app);

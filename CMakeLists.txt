@@ -15,7 +15,6 @@ project(
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CPM_SOURCE_CACHE vendor/)
-file(GLOB PATCHES "support/patches/*.patch")
 file(
   DOWNLOAD
   https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.2/CPM.cmake
@@ -31,12 +30,23 @@ CPMAddPackage(
   DOWNLOAD_ONLY TRUE
   CUSTOM_CACHE_KEY cache
 )
+file(GLOB NAP_PATCHES "support/patches/nap-*.patch")
 CPMAddPackage(
   NAME nappgui_src
   # commit is on Nov 28, 2024
   URL https://github.com/frang75/nappgui_src/archive/50887ca.tar.gz
   URL_HASH SHA256=07b439b4aac034ec0912be38f51c637eacb61203bbea106b1704228d6ce5a74c
-  PATCHES ${PATCHES}
+  PATCHES ${NAP_PATCHES}
+  DOWNLOAD_ONLY TRUE
+  CUSTOM_CACHE_KEY cache
+)
+file(GLOB BRN_PATCHES "support/patches/brn-*.patch")
+CPMAddPackage(
+  NAME boron
+  # commit is on Jan 23, 2025
+  URL https://codeberg.org/wickedsmoke/boron/archive/64ca99397d.tar.gz
+  URL_HASH SHA256=f01d6b94154a9613d2bac1e0562b9c2b78adf8320bf36789fa4200cc48cbc351
+  PATCHES ${BRN_PATCHES}
   DOWNLOAD_ONLY TRUE
   CUSTOM_CACHE_KEY cache
 )
@@ -61,4 +71,11 @@ if (yyjson_ADDED)
   add_subdirectory(${yyjson_SOURCE_DIR} EXCLUDE_FROM_ALL)
 endif()
 
+if (boron_ADDED)
+  # TODO: dynamic linking, deferring as it is harder
+  # using SYSTEM here to suppress warnings from boron
+  add_subdirectory(${boron_SOURCE_DIR} EXCLUDE_FROM_ALL SYSTEM)
+endif()
+
+# add_subdirectory(src)
 add_subdirectory(src)

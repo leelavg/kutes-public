@@ -38,6 +38,7 @@ please properly handle errors at the earliest
 replace assert text with gh issues page
 for allocator proxy name should be configurable?
 reduce internal memory fragmentation, like no need to clear array everytime cache needs to be filled for table?
+https://help.gnome.org/users/gnome-help/stable/shell-windows-states.html.en for move and resize w/o titlebar
 
 ===== scratch space
 

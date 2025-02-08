@@ -1,0 +1,1457 @@
+#!/usr/bin/boron -sp
+/*
+	Copr - Compile Program v0.4.0
+	Copyright 2021-2024 Karl Robillard
+	Documentation is at http://urlan.sourceforge.net/copr.html
+*/
+
+debug_mode: false
+qt-version: 5
+bsd: linux: macx: sun: unix: win32: none
+msvc: false
+
+~copr~: context [
+project_file: %project.b
+target-os: none
+cli_options: ""
+verbose: 2
+
+action:
+dry_run:
+clear_caches: false
+archive_files:
+build_env:
+jobs: none
+;sub-projects: []
+
+~execute~: :execute		; Conflict with boron option; put options in context?
+
+/*
+	The cache-file contains the file-inf & job-list tables.
+	file-inf: [
+		size date filename [depend-file ...]	; four values per entry
+		...
+	]
+	job-list: [
+		source output [summary command ...]		; three values per entry
+		...
+	]
+*/
+file-inf: []
+job-list: []
+file-id-map: make hash-map! 64	; Maps filename to file-inf slices.
+
+benv: context [
+	asm: "as"
+	cc:  "cc -c -pipe -Wall -W"
+	c++: "c++ -c -pipe -Wall -W"
+	link_c: "cc -o "
+	link_c++: "c++ -o "
+	link_lib: "ar rc "
+	cat_lib: "ld -Ur -o "
+	obj_opt: " -o "
+	obj_suffix: %.o
+	lib_prefix: %lib
+	lib_suffix: %.a
+	libpath_opt: " -L"
+	shlib_opt: "-shared"
+	shlib_suffix: %.so
+	debug: "-g -DDEBUG"
+	debug-link: ""
+	release: "-O3 -DNDEBUG"
+	opengl-link: "-lGL"
+	sys_console:
+	sys_windows: ""
+	qt_inc: %/usr/include/qt5
+	qt_c++: "-fPIC"
+	qt_release: "-DQT_NO_DEBUG"
+	moc: "moc-qt5"
+	qrc: "rcc-qt5"
+]
+
+compile-rules: [
+	ext-map: [
+		%.c     rule-c
+		%.cpp   rule-c++
+		%.cxx   rule-c++
+		%.cc    rule-c++
+		%.s     rule-asm
+		%.asm   rule-asm
+		%.qrc   rule-qrc
+		%.rc    rule-rc
+	]
+
+	src-base:
+	src-file:
+	out-file: none
+	job-output: []
+
+	append-obj: does [
+		if eq? obj_suffix find/last out-file '.' [
+			appair obj-args ' ' out-file
+		]
+	]
+
+	; Emit job-list entry for a source file.
+	emit: func [rule src /extern has-gen has-c++] [
+		either rule [
+			set-files rule src
+		][
+			rule: prepare-rule src
+		]
+		if eq? 'gen_dir rule/2/1 [
+			has-gen: true
+		]
+		if same? rule rule-c++ [
+			has-c++: true
+		]
+
+		clear job-output
+		append-obj
+		do rule/3
+
+		either chain: get rule/5 [
+			push-rule rule
+
+			set-files chain out-file
+			append-obj
+			push-rule chain
+		][
+			push-rule rule
+		]
+		finish-job src job-output
+	]
+
+	emit-moc: func [src] [emit rule-moc src]
+
+	push-rule: func [rule] [
+		push-command [rule/1 ' ' src-file] rule/4
+		append job-output out-file
+	]
+
+	set-files: func [rule src /extern src-base src-file out-file] [
+		ext: find/last src '.'
+		src-file: src
+		src-base: slice second split-path src ext
+		out-file: rejoin rule/2
+	]
+
+	prepare-rule: func [src /extern src-base src-file out-file] [
+		ext: find/last src '.'
+		ifn rule: select ext-map ext [
+			error join "No compile rule defined for " ext
+		]
+		rule: get rule
+		src-file: src
+		src-base: slice second split-path src ext
+		out-file: rejoin rule/2
+		rule
+	]
+
+	; These rules are bound to target (copy of clean-target) & benv.
+	; Rule fields: [verb  out-file  cache_dependencies  command  chain]
+
+	rule-asm: [
+		"Assemble" [
+			obj_dir src-base obj_suffix
+		][
+			;update-info-include src-file include_paths defines
+		][
+			asm ' ' src-file opt_asm
+			ne-string select custom_flags src-file
+			" -o " out-file
+		]
+		none
+	]
+	rule-c: [
+		"Compile" [
+			obj_dir src-base obj_suffix
+		][
+			update-info-include src-file include_paths defines
+		][
+			cc ' ' src-file ' ' either debug_mode debug release
+			inc-args opt_compile
+			ne-string select custom_flags src-file
+			obj_opt out-file
+		]
+		none
+	]
+	rule-c++: [
+		"Compile" [
+			obj_dir src-base obj_suffix
+		][
+			update-info-include src-file include_paths defines
+		][
+			c++ ' ' src-file ' ' either debug_mode debug release
+			inc-args opt_compile opt_compile_cxx
+			ne-string select custom_flags src-file
+			obj_opt out-file
+		]
+		none
+	]
+	rule-moc: [
+		"Qt moc" [
+			gen_dir %moc_ src-base %.cpp
+		]
+			none
+		[
+			moc ' ' src-file " -o " out-file
+		]
+		rule-c++
+	]
+	rule-qrc: [
+		"Qt resource" [
+			gen_dir src-base %.cpp
+		][
+			dep: make block! 16
+			icon-path: first split-path src-file
+			parse read/text src-file [some[
+				thru "<file" thru '>' tok: to "</file>" :tok (
+					tok: either icon-path [join icon-path tok] [to-file tok]
+					append dep tok
+					cache-info tok none
+				)
+			]]
+			cache-info src-file dep
+		][
+			qrc ' ' src-file
+			ne-string select custom_flags src-file
+			" -o " out-file
+		]
+		rule-c++
+	]
+	rule-rc: [
+		"Windows resource" [
+			obj_dir src-base %-rc res_suffix
+		][
+			if ne? obj_suffix res_suffix [
+				appair obj-args ' ' out-file
+			]
+
+			dep: make block! 4
+			parse read/text src-file [some[
+				thru "ICON" thru '"' tok: to '"' :tok (
+					tok: to-file tok
+					either tmp: find_include_file tok include_paths [
+						append dep tmp
+						cache-info tmp none
+					][
+						print ["Warning: ICON" tok "not found!"]
+					]
+				)
+			]]
+			cache-info src-file dep
+		][
+			win_rc out-file
+			ne-string select custom_flags src-file
+			' ' src-file
+		]
+		none
+	]
+
+	rule-blocks: reduce [rule-asm rule-c rule-c++ rule-moc rule-qrc rule-rc]
+]
+
+forall args [
+	switch first args [
+		"-a" [action: 'archive]
+		"-c" [action: 'clean]
+		"-d" [debug_mode: true append cli_options "debug_mode: true^/"]
+		"-e" [build_env: second ++ args]
+		"-h" [action: 'help]
+		"-i" [action: 'inspect]
+		"-j" [
+			jobs: to-int second ++ args
+			if lt? jobs 2 [jobs: none]
+			if gt? jobs 6 [jobs: 6]
+		]
+		"-r" [dry_run: true  ~execute~: func [cmd] [0]]
+		;"-s" [error "Show statistics not implemented"]
+		"-t" [target-os: to-word second ++ args]
+		"-v" [verbose: to-int second ++ args]
+		"--clear" [clear_caches: true]
+		[
+			either find a1: first args ':' [
+				appair cli_options a1 '^/'
+			][
+				project_file: to-file a1
+			]
+		]
+	]
+]
+
+; Show help after parsing args to get any project_file.
+if eq? action 'help [
+	context [
+		usage: {copr version 0.4.0
+
+Copr Options:
+  -a              Archive source files.
+  -c              Clean up (remove) previously built files & project cache.
+  -d              Build in debug mode.         (default is release)
+  -e <env_file>   Override build environment.
+  -h              Print this help and quit.
+  -i              Inspect project cache.
+  -j <count>      Use specified number of job threads.  (1-6, default is 1)
+  -r              Do a dry run and only print commands.
+  -t <os>         Set target operating system. (default is auto-detected)
+  -v <level>      Set verbosity level.         (0-4, default is 2)
+  --clear         Remove caches of all projects.
+  <project>       Specify project file.        (default is project.b)
+  <opt>:<value>   Set project option.
+
+Project Options:
+  debug_mode:     Build in debug mode.}
+
+		if all [
+			exists? project_file
+			opt: select load project_file 'options
+		][
+			parse opt [some[
+				tok:
+				set-word! (
+					append usage rejoin ["^/  " pw: to-text tok/1 ':']
+				)
+				| string! (
+					append usage join skip "               " size? pw tok/1
+				)
+				| skip
+			]]
+		]
+		prin terminate usage '^/'
+	]
+	quit
+]
+
+cache-dir: rejoin any [
+	select [
+		Windows [terminate getenv "LOCALAPPDATA" '\' %copr\ ]
+		Darwin  [terminate getenv "HOME" '/' %Library/Caches/copr/]
+	] environs/os
+	[terminate getenv "HOME" '/' %.cache/copr/]
+	;[%/tmp/copr/]
+]
+
+if clear_caches [
+	if exists? cache-dir [
+		foreach f read cache-dir [
+			if eq? 25 size? f [
+				delete join cache-dir f
+			]
+		]
+	]
+	quit
+]
+
+ifn exists? project_file [
+	print [project_file "does not exist; Please specify project file."]
+	quit/return 66	; EX_NOINPUT
+]
+
+active-env: func [blk] [do blk]
+
+ifn target-os [
+	switch target-os: environs/os [
+		darwin  [target-os: 'macx]
+		windows [target-os: 'win32]
+	]
+]
+
+either eq? 'mingw target-os [
+	; mingw is a special case of win32.
+	set 'win32 :active-env
+][
+	set in binding? 'unix target-os :active-env
+	if find [bsd linux sun] target-os [unix: :active-env]
+]
+
+if benv-target: select [
+	macx [
+		shlib_opt: "-dynamiclib"
+		shlib_suffix: %.dylib
+		opengl-link:  "-framework OpenGL"
+		qt_c++: none
+		moc: "$(QTDIR)/bin/moc"
+		qrc: "$(QTDIR)/bin/rcc"
+	]
+	mingw [
+		asm: "x86_64-w64-mingw32-as"
+		cc:  "x86_64-w64-mingw32-gcc -c -pipe -Wall -W"
+		c++: "x86_64-w64-mingw32-g++ -c -pipe -Wall -W"
+		link_c: "x86_64-w64-mingw32-gcc -o "
+		link_c++: "x86_64-w64-mingw32-g++ -o "
+		link_lib: "x86_64-w64-mingw32-ar rc "
+		cat_lib: "x86_64-w64-mingw32-ld -Ur -o "
+		shlib_suffix: %.dll
+		opengl-link: "-lopengl32"
+		sys_windows: " -mwindows"
+		qt_inc: %/usr/x86_64-w64-mingw32/sys-root/mingw/include/qt5
+		qt_c++: none
+		moc: "/usr/x86_64-w64-mingw32/bin/qt5/moc"
+		qrc: "/usr/x86_64-w64-mingw32/bin/qt5/rcc"
+		res_suffix: obj_suffix
+		win_rc: "x86_64-w64-mingw32-windres -o "
+	]
+	win32 [
+		set 'msvc true
+		asm: "ml64.exe"
+		cc:  "cl.exe /c /nologo -W3 -D_CRT_SECURE_NO_WARNINGS"
+		c++: join cc " /EHsc"
+		link_c:
+		link_c++: "link.exe /nologo /out:"
+		link_lib: "lib.exe /nologo /out:"
+		obj_opt: " /Fo"
+		obj_suffix: %.obj
+		lib_prefix: ""
+		lib_suffix: %.lib
+		libpath_opt: " /libpath:"
+		shlib_opt: "/DLL"
+		shlib_suffix: %.dll
+		debug:		"/MDd -Zi -DDEBUG"
+		debug-link: " /DEBUG"
+		release:	"/MD -O2 -DNDEBUG"
+		opengl-link: "-lopengl32"
+		sys_console: " /subsystem:console"
+		sys_windows: " /subsystem:windows"
+		set 'qt-version 6
+		set 'QTDIR "C:\Qt\6.8.1\msvc2022_64"
+		qt_inc: join QTDIR "\include"
+		qt_c++: none
+		moc: join QTDIR "\bin\moc.exe"
+		qrc: join QTDIR "\bin\rcc.exe"
+		res_suffix: %.res
+		win_rc: "rc.exe /fo "
+	]
+] target-os [
+	do bind benv-target benv
+]
+
+if build_env [
+	do bind/secure load build_env benv
+]
+
+benv-qt6: [
+	qt_inc: either eq? target-os 'mingw
+		%/usr/x86_64-w64-mingw32/sys-root/mingw/include/qt6
+		%/usr/include/qt6
+	; Fedora uses the same Qt binaries for both Linux & MinGW builds.
+	moc: "/usr/lib64/qt6/libexec/moc"
+	qrc: "/usr/lib64/qt6/libexec/rcc"
+]
+
+;-------------------------------
+; Include Parser
+
+context [
+	dtok:
+	use-include: none
+	inc-stack: []
+
+	space: charset " ^-"
+	set 'define-symbol charset "_0-9A-Za-z"
+
+	if-case: func [enable /extern use-include] [
+		if last inc-stack [use-include: enable]
+	]
+	push-if: func [enable] [
+		append inc-stack use-include
+		if-case enable
+	]
+
+	def-exp: [
+		some space opt "defined(" dtok: some define-symbol :dtok thru '^/'
+	]
+
+	set 'parse-includes func [
+		code defs inc-blk
+		/extern dtok use-include ~qobject
+	][
+		use-include: true
+		clear inc-stack
+		defs: copy defs
+		parse code [any[
+			some space
+		  | '#' any space [
+				"include" some space '"' dtok: to '"' :dtok (
+					if use-include [append inc-blk copy dtok]
+				)
+			  | "define"  def-exp   (if use-include [append defs dtok])
+			  | "ifdef"   def-exp   (push-if find defs dtok)
+			  | "ifndef"  def-exp   (push-if not find defs dtok)
+			  | "if"      def-exp   (push-if either eq? dtok "1"
+										[true] [find defs dtok])
+			  | "else"    thru '^/' (if-case not use-include)
+			  | "elif"    def-exp   (if-case find defs dtok)
+			  | "endif"   thru '^/' (use-include: pop inc-stack)
+			]
+		  | "/*" thru "*/"
+		  | "Q_OBJECT" thru '^/' (~qobject: true)
+		  | thru '^/'
+		]]
+	]
+]
+
+new-block: does [make block! 0]
+
+; Read into an established buffer to avoid mallocs.
+~rbuf: make string! 16384
+read-buf: func [file] [
+	read/into file ~rbuf
+	~rbuf	; Read can return none
+]
+
+
+debug-inc-print: either eq? verbose 4 [func [blk] [print blk]] none
+
+all-includes: make hash-map! 64
+
+find_include_file: func [
+	; Checks if a file exists in the current directory or any set of paths.
+	file  file!/string!
+	paths block!
+][
+	debug-inc-print [' ' file]
+
+	file: to-file file
+	if full: pick all-includes file [
+		return full
+	]
+
+	if exists? file [
+		poke all-includes file file
+		return file
+	]
+
+	forall paths [
+		path: to-file paths/1
+		term-dir path
+		full: join path file
+
+		debug-inc-print ["   " full]
+		if exists? full [
+			poke all-includes file full
+			return full
+		]
+	]
+	none
+]
+
+included_files: func [
+   /* Returns a block of the files which are included in a C/C++ file.
+	  Adds    #include "file.h"
+	  Ignores #include <file.h>
+   */
+	file	file!/string!	; File to check for #include statements
+	paths	block!			; Paths to check for included files
+	defs	block!			; Defined C pre-processor symbols
+][
+	out: new-block
+
+	ifn exists? file [
+		print ["included_files:" file "not found"]
+		return out
+	]
+
+	parse-includes read-buf file defs out
+	blk: intersect out out   ; Removes duplicates.
+
+	if :debug-inc-print [print ["Finding include files for" file] probe blk]
+
+	; Get path of each included file. Drop and complain if not found.
+	clear out
+	forall blk [
+		tmp: find_include_file blk/1 paths
+		either tmp [
+			append out tmp
+		][
+			print rejoin
+				["included_files: " blk/1 " (from " file ") not found!"]
+		]
+	]
+	out
+]
+
+;-------------------------------
+; Private Helpers
+
+compile-data: context [
+	; Program for the entire project; referenced by job-list entries.
+	cmd-store: make block! 64
+
+	inc-args: make string! 128
+	obj-args: copy inc-args
+	lib-args: copy inc-args
+	has-gen:
+	has-c++: false
+
+	tcmd: none			; command block of current target.
+	moc-files: []
+
+	reset-data: does [
+		clear inc-args
+		clear obj-args
+		clear lib-args
+		has-gen:
+		has-c++: false
+		clear moc-files
+		tcmd: tail cmd-store
+	]
+
+	; Low-level poke (or append) to cache file-inf & file-id-map.
+	cache-info: func [file dep] [
+		either fid: pick file-id-map file [
+			poke fid 4 dep
+		][
+			either info: info? file [
+				info: slice info 1,3
+			][
+				; Dummy value. File may be generated later.
+				info: reduce [0 now/date file]
+			]
+			append file-inf mark-sol info
+			append/block file-inf dep
+			fid: slice skip tail file-inf -4 4
+			poke file-id-map info/3 fid
+		]
+	]
+
+	inc-seen: make block! 64
+	update-info-include: func [
+		file inc_paths defs
+		/recurse
+		/local it
+		/extern ~qobject
+	][
+		ifn inc_paths [inc_paths: []]
+		ifn defs [defs: []]
+		ifn recurse [
+			clear inc-seen
+			debug-inc-print ["uii **" file "**"]
+		]
+
+		~qobject: false
+		depend: included_files file inc_paths defs
+		if ~qobject [append moc-files file]
+
+		either empty? depend [
+			pval: none
+		][
+			more: new-block
+			seen-tail: tail inc-seen
+			foreach it depend [
+				if find inc-seen it [
+					debug-inc-print ["Extra include of" it]
+					continue
+				]
+				append inc-seen it
+				append more update-info-include/recurse it inc_paths defs
+			]
+			clear seen-tail
+			pval: depend: union depend more
+		]
+		cache-info file pval
+		depend
+	]
+
+	; None to Empty functions.
+	ne-string: func [val] [either val val ""]
+
+	finish-job: func [src out] [
+		if block? out [
+			out: either eq? 1 size? out [
+				first out
+			][
+				copy out
+			]
+		]
+		append/block append job-list mark-sol src out
+		append/block job-list slice tcmd tail cmd-store
+		set 'tcmd tail cmd-store
+	]
+
+	push-command: func [summary com] [
+		appair cmd-store
+			either summary [mark-sol rejoin summary] none
+			mark-sol rejoin com
+	]
+
+	stringify: func [blk str-out flag /suffix /local it] [
+		if blk [
+			foreach it blk pick [
+				[append appair str-out ' ' it flag]
+				[appair str-out flag it]
+			] suffix
+		]
+	]
+
+	set 'compile-target func [
+		tname tfile spec block! link-cmd block!
+		/extern name output_file
+		/local f
+	][
+		tc: create-target spec
+		ifn tc/source_files [error join "No source specified for " tname]
+		reset-data
+
+		bind compile-rules/rule-blocks tc
+
+		do bind [
+			name: tname
+			output_file: either output_dir [join output_dir tfile] [tfile]
+
+			stringify include_paths inc-args " -I"
+			stringify link_paths    lib-args benv/libpath_opt
+			either msvc [
+				stringify/suffix link_libs lib-args ".lib"
+			][
+				stringify link_libs lib-args " -l"
+			]
+
+			foreach f source_files [
+				compile-rules/emit none f
+			]
+			if moc_headers [
+				append moc-files moc_headers
+			]
+			ifn empty? moc-files [
+				foreach f intersect moc-files moc-files [
+					compile-rules/emit-moc f
+				]
+			]
+			do bind bind link-cmd compile-data tc
+
+			ifn dry_run [
+				if all [obj_dir not exists? obj_dir] [
+					make-dir/all obj_dir
+				]
+				if all [has-gen gen_dir not exists? gen_dir] [
+					make-dir/all gen_dir
+				]
+			]
+		] tc
+		vprint 4 [mold tc]
+	]
+
+	set 'gen func [output dep commands /local it] [
+		reset-data
+		either block? dep [
+			foreach it dep [cache-info it none]
+			dep: dep/1
+		][
+			cache-info dep none
+		]
+
+		foreach it split trim commands '^/' [
+			push-command ["Build " output] [trim it]
+		]
+		finish-job dep output
+	]
+]
+
+;-------------------------------
+; Project Commands
+
+do-any: func [file] [
+	if exists? file [do file]
+]
+
+; Spec is a table of [name: value "Help"] triplets.
+set 'options func [spec block!] [
+	do spec
+	do-any %project.config
+
+	; Validate command line options.
+	w1: append words-of context spec 'debug_mode
+	w2: collect set-word! to-block cli_options
+	ifn empty? w2: difference w2 w1 [
+		error join "Invalid project options: " mold w2
+	]
+	do cli_options
+]
+
+default_block: none
+set 'default func [blk] [
+	set 'default_block blk
+]
+
+exe-link: bind [
+	push-command ["Link " output_file] [
+		either has-c++ link_c++ link_c
+		output_file
+		either debug_mode debug-link ""
+		obj-args opt_link lib-args
+	]
+	finish-job 'exe-job output_file
+] benv
+
+; Build commands for an executable binary.
+set 'exe func [basename spec] [
+	either :win32 [
+		lcmd: copy/deep exe-link
+		append lcmd/3 [
+			either cfg_console benv/sys_console benv/sys_windows
+		]
+		compile-target basename join basename %.exe spec lcmd
+	][
+		compile-target basename basename spec exe-link
+	]
+]
+
+; Build commands for a static library.
+set 'lib func [basename spec] [
+	outf: rejoin [benv/lib_prefix basename benv/lib_suffix]
+	compile-target basename outf spec [
+		either empty? link_libs [
+			push-command ["Archive " output_file] [
+				benv/link_lib output_file obj-args opt_link
+			]
+		][
+			; Concatenate other libraries.
+			; TODO: Support win32.
+			push-command none [
+				benv/cat_lib ne-string obj_dir name %lib.o obj-args lib-args
+			]
+			push-command ["Archive " output_file] [
+				benv/link_lib output_file ' ' ne-string obj_dir name %lib.o
+			]
+		]
+		unix [
+			push-command none ["ranlib " output_file]
+			ifn debug_mode [
+				push-command none ["strip -d " output_file]
+			]
+		]
+		finish-job 'library-job output_file
+	]
+]
+
+; Build commands for a shared library.
+set 'shlib func [basename spec] [
+	if block? basename [
+		version:  basename/2
+		basename: basename/1
+	]
+	outf: rejoin [benv/lib_prefix basename benv/shlib_suffix]
+	link-cmd: exe-link
+
+	either :unix [
+		if version [
+			lib_base: outf
+			lib_m: rejoin [lib_base '.' version/1]
+			outf: rejoin [
+				; Handles any number of version elements.
+				lib_base '.' construct mold version [',' '.']
+			]
+			link-cmd: append copy slice exe-link -3 [
+				push-command none ["ln -sf " output_file ' ' lib_m]
+				push-command none ["ln -sf " output_file ' ' lib_base]
+				finish-job 'library-job reduce [output_file lib_m lib_base]
+			]
+		]
+	][
+		version: none
+	]
+
+	compile-target basename outf
+		append copy spec bind [
+			lflags benv/shlib_opt
+			unix [
+				cflags "-fPIC"
+				if version [
+					lflags join "-Wl,-soname," lib_m
+				]
+			]
+			macx [
+				lflags join "-install_name @rpath/" output_file
+			]
+		] target-func
+		link-cmd
+]
+
+set 'sub-project func [def block!] [
+	parse def [some[
+		tok:
+		file! (lpath: terminate tok/1 '/')
+	  | word! file!		; e.g. lib %my-module
+	  | string! (lconfig: trim/lines tok/1)
+	]]
+
+	ifn lpath [error "Invalid sub-project"]
+	/*
+	if lconfig [
+		write join lpath %project.config lconfig
+	]
+	eval-project lpath
+	*/
+	vprint 1 ["Sub-project" lpath "ignored!"]
+]
+
+; m2 compatibility
+set 'rule :gen
+
+;-------------------------------
+
+vprint: func [level msg] [
+	ifn lt? verbose level [print msg]
+]
+
+clean-target: [
+	name:
+	output_file:
+	output_dir:
+	defines: none
+
+	obj_dir: %.copr/obj/
+	gen_dir: %.copr/
+
+	include_paths:
+	link_paths:
+	link_libs:
+	moc_headers:
+	source_files: none
+
+	opt_asm:
+	opt_compile:
+	opt_compile_cxx:
+	opt_link: none
+
+	custom_flags: []		; Pairs of files & flags.
+
+	cfg_console:
+	command: none
+]
+
+target-collect: make context clean-target [
+	white: charset " ^-^/"
+	non-white: complement copy white
+	parse-white: func [str string!] [
+		blk: make block! 8
+		parse str [any[
+			any white tok: some non-white :tok (append blk tok)
+		]]
+		if empty? blk [append blk str]
+		blk
+	]
+
+	+blk: func ['member list] [
+		ifn block? blk: get member [
+			set member blk: new-block
+		]
+		append blk either string? list
+			[parse-white list]
+			[reduce list]
+	]
+
+	+blk1: func ['member item] [
+		ifn block? blk: get member [
+			set member blk: new-block
+		]
+		append blk item
+	]
+
+	+opt: func [options str] [
+		appair options ' ' trim/lines str
+	]
+
+	add_def: func [str] [
+		parse str [some[
+			thru "-D" tok: some define-symbol :tok (+blk1 defines tok)
+		]]
+	]
+
+	; Re-direct clean-target values to this context.
+	reset: does bind clean-target self
+
+	set 'create-target func [spec /local str] [
+		; Fill target-collect.
+		reset
+		foreach str [opt_asm opt_compile opt_compile_cxx opt_link] [
+			set str make string! 80
+		]
+		do default_block
+		do spec
+
+		; Transfer values to new target.
+		tc: context clean-target
+		set words-of tc values-of self
+		tc
+	]
+]
+
+target-func: context bind [
+	into:		func [dir] [set 'output_dir term-dir dir]
+	objdir:		func [dir] [set 'obj_dir    term-dir dir]
+
+	aflags:		func [str string!] [+opt opt_asm  str]
+	cflags:		func [str string!] [+opt opt_compile str		add_def str]
+	cxxflags:	func [str string!] [+opt opt_compile_cxx str	add_def str]
+	lflags:		func [str string!] [+opt opt_link str]
+
+	console:	does [cfg_console: true]
+	opengl:		does [lflags benv/opengl-link]  ; Using OpenGL libraries.
+
+	; m2 compatibility
+	debug:		none	;does [debug_mode: true]
+	release:	none	;does [debug_mode: false]
+
+	dist: func [files block!] [+blk1 archive_files files]
+
+	include-define: func [str string!] [+blk defines str]
+
+	include_from: func [list string!/file!/block!] [
+		+blk include_paths list
+	]
+
+	sources: func [arg block! /flags fstr] [
+		+blk source_files arg
+		if flags [
+			sstr: join ' ' fstr
+			forall arg [
+				appair custom_flags arg/1 sstr
+			]
+		]
+	]
+
+	sources_from: func [path files file!/block! /local it] [
+		if file? files [
+			ext-skip: negate size? ext: files
+			remove-each it files: read path [
+				ne? ext skip tail it ext-skip
+			]
+		]
+		terminate path '/'
+		+blk source_files map it copy files [join path it]
+	]
+
+	libs: func [list string!/file!/block!] [
+		+blk link_libs list
+	]
+
+	libs_from: func [dir list] [
+		+blk1 link_paths dir
+		+blk link_libs list		; libs list
+	]
+
+	~qt-module: func [name no-link] pick [[
+		include_from join benv/qt_inc name
+		ifn no-link [libs rejoin ["Qt" qt-version skip name 3]]
+	][
+		include_from rejoin ["/Library/Frameworks" name ".framework/Headers"]
+		ifn no-link [lflags join "-framework " next name]
+	]] none? :macx
+
+	qt-moc: func [headers] [
+		+blk moc_headers headers
+	]
+
+	qt-modules: [
+		gui			 "/QtGui"
+		widgets		 "/QtWidgets"
+		network		 "/QtNetwork"
+		concurrent	 "/QtConcurrent"
+		opengl		 "/QtOpenGL"
+		openglwidgets ignore
+		printsupport "/QtPrintSupport"
+		svg			 "/QtSvg"
+		sql			 "/QtSql"
+		xml			 "/QtXml"
+		core		 ignore
+	]
+
+	qt: func [modules block! /no-link] [
+		oglw: 'ignore
+		if eq? 6 qt-version [
+			either msvc [
+				cxxflags "/Zc:__cplusplus /permissive-"
+			][
+				do bind benv-qt6 benv
+			]
+			oglw: "/QtOpenGLWidgets"
+		]
+		poke find qt-modules 'openglwidgets 2 oglw
+
+		cxxflags benv/qt_release
+		if opt: benv/qt_c++ [cxxflags opt]
+
+		include_from benv/qt_inc
+
+		~qt-module "/QtCore" no-link
+		if find modules 'widgets [
+			ifn find modules 'gui [~qt-module "/QtGui" no-link]
+		]
+		foreach it modules [
+			iname: select qt-modules it
+			switch type? iname [
+				string! [~qt-module iname no-link]
+				none!   [error join "Invalid Qt module " it]
+			]
+		]
+		if all [msvc eq? 6 qt-version] [
+			libs_from join QTDIR "\lib" [%Qt6EntryPoint %Shell32]
+		]
+	]
+] target-collect
+
+compile-rules: context bind bind compile-rules benv compile-data
+
+;-------------------------------
+; Load or create cache
+
+; Change to project dir if needed.
+set [path project_file] split-path project_file
+if path [change-dir path]
+
+pfile-path: join current-dir project_file
+cache-file: rejoin [
+	cache-dir
+	slice to-text checksum pfile-path 2,16
+	'-'
+	skip to-text to-hex checksum/crc32 to-string pfile-path 2
+]
+
+if eq? action 'inspect [
+	either exists? cache-file [
+		print ["Inspecting cache" cache-file]
+		probe load cache-file
+	][
+		print [cache-file "does not exist!"]
+	]
+	quit
+]
+
+;info-size: :second
+info-time: :third
+
+;cinf-size: :first
+cinf-time: :second
+cinf-file: :third
+
+current-map:  make hash-map! 64
+outdated-map: make hash-map! 64
+cache-modified: false
+
+either all [
+	exists? cache-file
+	gt? info-time info? cache-file info-time info? project_file
+][
+	vprint 2 ["Loading cache" cache-file]
+	set [file-inf job-list] load cache-file
+
+	; Mark files as current or not.
+	it: file-inf
+	forall it [
+		if outi: info? file: cinf-file it [
+			which-map: either eq? info-time outi cinf-time it
+				[current-map]
+				[outdated-map]
+			poke which-map file slice it 4
+		]
+
+		it: skip it 3
+	]
+][
+	vprint 2 ["Evaluating" project_file]
+
+	; NOTE: The project_file is bound to target-func before evaluation so
+	; that the words can be overridden inside the project itself.
+	~proj~: bind load project_file target-func
+	ifn find ~proj~ 'options [
+		do-any %project.config
+		do cli_options
+	]
+	do ~proj~
+
+	cache-modified: true
+	ifn dry_run [
+		ifn exists? cache-dir [make-dir cache-dir]
+	]
+]
+
+switch action [
+	clean [
+		if exists? cache-file [delete cache-file]
+		; delete target (obj_dir gen_dir)?
+		foreach [src out cmd] job-list [
+			either block? out [
+				forall out [try [delete out/1]]
+			][
+				try [delete out]
+			]
+		]
+		quit
+	]
+
+	archive [
+		tmp: new-block
+		foreach [src out cmd] job-list [
+			ifn word? src [
+				append tmp src
+				if dep: select file-inf src [
+					forall dep [
+						append tmp dep/1
+					]
+				]
+			]
+		]
+		if archive_files [append tmp archive_files]
+
+		appair clear ~rbuf "tar czf project.tar.gz " project_file
+		foreach src intersect tmp tmp [
+			appair ~rbuf ' ' src
+		]
+
+		either dry_run [print ~rbuf] [~execute~ ~rbuf]
+		quit
+	]
+]
+
+vprint 3 [mold file-inf mold job-list]
+
+;-------------------------------
+; Gather commands needed to rebuild modified sources and/or missing outputs.
+
+; There is no formal tracking of dependencies between targets.
+; These functions determine the library dependencies.
+lib-list: new-block
+record-built-lib: func [file] [
+	; Convert library path to a link command.
+	if block? file [file: file/1]	; For versioned shlib
+	parse to-string file [any [thru '/'] opt "lib" name: to '.' :name]
+	append lib-list join " -l" name
+]
+requires-built-lib: func [cmds /local it] [
+	; Assuming exe-link command.  TODO: Handle libs.
+	if string? cmds: last cmds [
+		foreach it lib-list [
+			if find cmds it [return true]
+		]
+	]
+	false
+]
+
+outdated?: func [src] [
+	ifn fentry: pick current-map src [
+		return true
+	]
+	if dep: fentry/4 [
+		forall dep [
+			ifn pick current-map dep/1 [
+				return true
+			]
+		]
+	]
+	false
+]
+
+outputs-missing?: func [out] [
+	if block? out [
+		forall out [
+			ifn exists? out/1 [return true]
+		]
+		return false
+	]
+	not exists? out
+]
+
+dep-changed: false
+update-inf: none
+build-jobs: make block! 64		; job-list slices
+
+record-job: func [it] [
+	append/block build-jobs slice it 3
+]
+
+jlist: job-list
+either cache-modified [
+	forall jlist [
+		record-job jlist
+		jlist: skip jlist 2
+	]
+][
+	forall jlist [			; (src out cmds)
+		src: jlist/1
+		out: jlist/2
+		either word? src [
+			if any [
+				dep-changed
+				requires-built-lib jlist/3	;cmds
+				outputs-missing? out
+			][
+				dep-changed: false
+				if eq? 'library-job src [
+					record-built-lib out
+				]
+				record-job jlist
+			]
+		][
+			if any [outdated? src outputs-missing? out] [
+				record-job jlist
+				dep-changed: true
+			]
+		]
+		jlist: skip jlist 2
+	]
+
+	update-inf: func [src] [
+		if all [
+			not word? src
+			fentry: pick outdated-map src
+			srci: info? src
+		][
+			change fentry slice srci 1,2		; Update size & time.
+			remove/key outdated-map src
+			set 'cache-modified true
+		]
+	]
+]
+
+if empty? build-jobs [
+	vprint 1 "All targets are up to date"
+	quit
+]
+
+;-------------------------------
+; Run jobs
+
+switch verbose [
+	0 [
+		report: none
+		report-fail: [print [/*target/name*/ summary "failed!"]]
+	]
+	1 [
+		cmd-count: 0
+		foreach it build-jobs [
+			cmd-count: add cmd-count div size? it/3 2
+		]
+		cmd-done: 0
+		report: [
+			if summary [
+				print format [-2 "% " 4] [
+					div mul 100 cmd-done cmd-count
+					summary
+				]
+			]
+			++ cmd-done
+		]
+		report-fail: [print cmd]
+	][
+		report: [print cmd]
+		report-fail: none
+	]
+]
+
+rc: 0
+start-time: now
+either all [jobs not dry_run] [
+	vprint 2 ["Running" jobs "jobs"]
+	next-worker:
+	worker-ports: []
+	job-record: []		; List of jobs sent to each worker.
+	loop jobs [
+		append/block job-record new-block
+		append worker-ports thread/port {{
+			while [string? val: read thread-port] [
+				count: 0
+				foreach cmd split val '^/' [
+					++ count
+					ifn zero? rc: execute cmd [break]
+				]
+				write thread-port to-coord [rc count]
+				ifn zero? rc [break]
+			]
+		}}
+	]
+
+	workers-busy?: does [
+		foreach it job-record [
+			ifn empty? it [return true]
+		]
+		false
+	]
+
+	wait-all-jobs: func [/extern rc summary cmd] [
+		while [workers-busy?] [
+			wp: wait worker-ports
+			either port? wp [
+				status: read wp
+
+				worker-it: find worker-ports wp
+				records: pick job-record index? worker-it
+				it: records/1/3
+				loop status/2 [
+					summary: first ++ it
+					cmd:     first ++ it
+					do report
+				]
+				either zero? status/1 [
+					update-inf records/1/1
+					remove records
+				][
+					rc: status/1
+					do report-fail
+					close wp		; Join with exited worker thread.
+					remove skip job-record sub index? worker-it 1
+					remove worker-it
+				]
+			][
+				print "Wait worker-ports returned none!"
+				;throw 70		; EX_SOFTWARE
+			]
+		]
+	]
+
+	foreach job build-jobs [
+		if word? job/1 [
+			wait-all-jobs		; Finish target dependencies.
+		]
+
+		ifn records: pick job-record index? next-worker [
+			break
+		]
+		append/block records job
+		wp: first ++ next-worker
+		if tail? next-worker [next-worker: worker-ports]
+
+		; All commands of a job are run serialized on one thread.
+		worker-cmds: make string! 128
+		foreach [summary cmd] job/3 [
+			appair worker-cmds cmd '^/'
+		]
+		write wp worker-cmds
+	]
+	wait-all-jobs
+
+	; Quit and join with worker threads.
+	forall worker-ports [close worker-ports/1]
+][
+	catch [
+		foreach job build-jobs [
+			foreach [summary cmd] job/3 [
+				do report
+				ifn zero? rc: ~execute~ cmd [
+					do report-fail
+					throw rc
+				]
+			]
+			update-inf job/1
+		]
+	]
+]
+
+ifn dry_run [
+	foreach fentry values-of outdated-map [
+		if srci: info? cinf-file fentry [
+			change fentry slice srci 1,2		; Update size & time.
+			cache-modified: true
+		]
+	]
+	if cache-modified [
+		write cache-file serialize reduce [file-inf job-list]
+	]
+	if zero? rc [
+		rt: to-string sub now start-time
+		vprint 1 ["Build time:" slice rt skip find rt '.' 3]
+	]
+]
+quit/return rc
+]

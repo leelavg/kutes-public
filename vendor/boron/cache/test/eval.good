@@ -1,0 +1,10 @@
+---- Do various types
+3
+unset!
+---- Do get-word!
+~unset!~
+2
+2
+---- Do functions
+5
+5

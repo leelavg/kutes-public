@@ -1,0 +1,73 @@
+			Boron Change Log
+
+
+V2.1.0 - 11 Dec 2023
+
+  * Evaluator rewritten to prepare for cooperative thread switching.
+  * Add UR_STATIC UBuffer flag.
+  * Construct binary! handles nested blocks and float values.
+  * Make string! accepts encoding word.
+  * Add split /keep option.
+  * Fix a thread port! race condition.
+  * Some bugfixes.
+
+
+V2.0.8 - 25 Apr 2022
+
+  * Parse 'into accepts any block type.
+  * Add appair function.
+  * Add boron_random() & boron_randomSeed() for access to UThread RNG.
+  * Checksum returns int! values with HEX flag set.
+  * Construct binary! handles coord! values.
+  * Execute treats \" as a literal double quote on Unix.
+  * Fix a couple bugs.
+
+
+V2.0.6 - 17 Feb 2021
+
+  * Add continue, ge?, and le? functions.
+  * Bitset! pick changed to return logic!.  Poking 0 or 0.0 will clear bits.
+  * Charset interprets dash as a range indicator.
+  * Fix hash-map! to accept file! keys.
+  * Fix info? timestamps on Windows.
+  * Automatically join threads when a thread port! is closed.
+  * Some bugfixes.
+
+
+V2.0.4 - 16 Nov 2020
+
+  * Replace parse /binary option with 'bits command.
+  * Implement swap for block!.
+  * Add split function.
+  * Add boron_tempBinary() function & ur_stackTop() macro.
+  * Fix small memory leak in ur_freezeEnv().
+  * Some bugfixes.
+
+
+V2.0.2 - 7 Mar 2020
+
+  * Update Boron-GL to use OpenGL 3.3 & ES 3.1 and support Android.
+  * On Android environs/os is set to 'Android.
+  * Add bind /secure option.
+  * Atan accepts coord!/vec3! to return result in the range -PI to PI.
+  * Math operators accept (coord! int!) arguments.
+  * Parse with binary! value handles to & thru rules.
+  * Fix save to append newline.
+  * Fix recycle bugs.
+  * User defined C function specification can type check user defined types.
+
+
+V2.0.0 - 1 Feb 2019
+
+  * Evaluator rewritten to use the stack more efficiently.
+  * Func creates local variables for set-word! values.  Added /extern option
+    to preserve any external bindings.
+  * Changed int! datatype to be 64 bits.
+  * Renamed decimal! datatype to double!.
+  * Added multiple brace string! syntax to more easily deal with embedded text.
+  * Added hash-map! datatype.
+  * Added format & setenv functions.
+  * Removed big-num! datatype.  The type slot is kept so a full implementation
+    could be added in the future.
+  * Change serialized format ID to BOR2.  This handles 64-bit int!, hash-map!,
+    and stores logic! with one less byte.

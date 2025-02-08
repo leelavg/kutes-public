@@ -14,6 +14,7 @@
 #include "osapp.inl"
 #include "osapp_gtk.inl"
 #include <osgui/osgui.h>
+#include <osgui/osglobals.h>
 #include <core/event.h>
 #include <core/strings.h>
 #include <osbs/bfile.h>
@@ -30,6 +31,7 @@
 struct _osapp_t
 {
     GtkApplication *gtk_app;
+    GSettings *g_settings;
     uint32_t argc;
     char_t **argv;
     gchar *resources_dir;
@@ -42,6 +44,8 @@ struct _osapp_t
     bool_t terminate;
     bool_t abnormal_termination;
     bool_t with_run_loop;
+    bool_t theme_changed;
+    bool_t theme_invert;
     Listener *OnTheme;
     FPtr_app_call func_OnFinishLaunching;
     FPtr_app_call func_OnTimerSignal;
@@ -85,9 +89,20 @@ OSApp *_osapp_init_imp(
     i_APP.terminate = FALSE;
     i_APP.abnormal_termination = FALSE;
     i_APP.with_run_loop = with_run_loop;
+    i_APP.theme_changed = FALSE;
+    i_APP.theme_invert = FALSE;
     i_APP.OnTheme = NULL;
     i_APP.func_OnFinishLaunching = func_OnFinishLaunching;
     i_APP.func_OnTimerSignal = func_OnTimerSignal;
+    i_APP.g_settings = NULL;
+    {
+        /* TODO: should be replaced with other desktop interfaces?, kde, mate etc */
+        const gchar *schema_id = "org.gnome.desktop.interface";
+        GSettingsSchemaSource *source = g_settings_schema_source_get_default();
+        GSettingsSchema *schema = g_settings_schema_source_lookup(source, schema_id, FALSE);
+        if (schema)
+            i_APP.g_settings = g_settings_new(schema_id);
+    }
     return &i_APP;
 }
 
@@ -128,6 +143,9 @@ static void i_terminate(OSApp *app)
         g_free((gpointer)app->user_dir);
         app->func_destroy(&app->listener);
     }
+
+    if (app->g_settings)
+        g_object_unref(app->g_settings);
 
     if (app->icon != NULL)
         g_object_unref(app->icon);
@@ -176,6 +194,36 @@ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const u
 
 /*---------------------------------------------------------------------------*/
 
+static void update_theme(OSApp *app)
+{
+    gchar *color_scheme = NULL;
+    bool_t dark_theme = FALSE;
+    g_settings_get(app->g_settings, "color-scheme", "s", &color_scheme);
+
+    if (str_equ_c(color_scheme, "prefer-dark"))
+        dark_theme = TRUE;
+    if (app->theme_invert)
+        dark_theme = !dark_theme;
+
+    g_object_set(gtk_settings_get_default(),
+                 "gtk-application-prefer-dark-theme",
+                 dark_theme,
+                 NULL);
+    osglobals_theme_changed();
+}
+
+/*---------------------------------------------------------------------------*/
+
+void _osapp_theme_invert_imp(OSApp *app, bool_t invert)
+{
+    cassert_no_null(app);
+    cassert(app == &i_APP);
+    app->theme_invert = invert;
+    app->theme_changed = TRUE;
+}
+
+/*---------------------------------------------------------------------------*/
+
 /* This function will be called repeatedly during the life-cycle of the app
    until it returns FALSE, at which point the timeout is automatically destroyed
    and the function will not be called again. */
@@ -190,10 +238,27 @@ static gboolean i_OnTimerLoop(gpointer data)
         return FALSE;
     }
 
+    if (app->theme_changed == TRUE)
+    {
+        update_theme(app);
+        if (app->OnTheme != NULL)
+            listener_event(app->OnTheme, 0, (OSApp *)app->listener, NULL, NULL, OSApp, void, void);
+        app->theme_changed = FALSE;
+    }
+
     if (app->func_OnTimerSignal != NULL)
         app->func_OnTimerSignal(app->listener);
 
     return TRUE;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_OnColorScheme(GSettings *settings, gchar *key, OSApp *osapp)
+{
+    cassert(str_equ_c(key, "color-scheme"));
+    osapp->theme_changed = TRUE;
+    unref(settings);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -212,6 +277,11 @@ static gboolean i_OnTimerInit(gpointer data)
         if (app->is_init == FALSE)
         {
             app->is_init = TRUE;
+            if (app->g_settings)
+            {
+                update_theme(app);
+                g_signal_connect(i_APP.g_settings, "changed::color-scheme", G_CALLBACK(i_OnColorScheme), (gpointer)&i_APP);
+            }
             app->func_OnFinishLaunching(app->listener);
             return FALSE;
         }

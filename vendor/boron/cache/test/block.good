@@ -1,0 +1,69 @@
+---- block newline formatting
+[
+    stuff: [
+        1 2 3 some [] ()
+    ]
+]
+[stuff2: [
+        1 2 3 some [] (a
+            b)
+    ]]
+---- make
+[a b c]
+[a b 3 c]
+[1 2]
+[a b c]
+[1 2]
+---- paren eval
+mul 3 4
+12
+---- compare
+true
+false
+true
+false
+---- append
+[1 2 3 "end"]
+[1 2 3 x y z]
+[1 2 3 [x y z]]
+[1 2 3 4 five 1 2 3 4 five]
+---- insert
+["end" 1 2 3]
+[x y z 1 2 3]
+[[x y z] 1 2 3]
+[1 2 3 4 five 1 2 3 4 five]
+[1 x y 2 3]
+---- select
+1
+2
+none
+none
+4
+---- set relation
+[a c]
+["h" 45 new]
+[b d]
+[]
+[2 2 0]
+[3 2 0 1 4]
+["-a"]
+["-a" "-A"]
+---- change
+[]
+[a 1 2 3 4 5]
+[d e]
+[a 1 2 3 4 5 d e]
+[]
+[1 2 3 4 5]
+[]
+[1 2 3 4 5]
+[c d e]
+[a "new" c d e]
+[]
+[a "new" c d e "new"]
+---- reverse
+[4 3 2 1]
+[3 2 1 4 5]
+---- nested
+[[1 2] [1 2]]
+[1 [[...] 3] four]

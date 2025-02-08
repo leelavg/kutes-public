@@ -1,0 +1,75 @@
+; v0.3.2
+   1391385     102480 boron -e quit
+ 233260406     127336 boron test/func.b
+  53878733     581312 boron -s scripts/m2/m2 -o /tmp/Makefile
+  16308125     253880 boron -e loop 10 [load %scripts/m2/m2]
+; master b0f8a735
+   1286224     100632 ./boron -e quit
+ 234262470     124280 ./boron test/func.b
+  53718258     568672 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16150986     251560 ./boron -e loop 10 [load %scripts/m2/m2]
+; b2-eval f15654fa4
+   1308259     103016 ./boron -e quit
+ 195412578     121104 ./boron test/func.b
+  51248605     554816 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16180834     247032 ./boron -e loop 10 [load %scripts/m2/m2]
+; signature type checking
+   1340445     111208 ./boron -e quit
+ 195445039     121104 ./boron test/func.b
+  51180209     554800 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16213017     247000 ./boron -e loop 10 [load %scripts/m2/m2]
+; Remove deprecated functions 964a010
+   1351876     111192 ./boron -e quit
+ 195906508     121088 ./boron test/func.b
+  50562257     559632 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16223222     246984 ./boron -e loop 10 [load %scripts/m2/m2]
+; ur_atomsSort() insertion sort
+   1171630     111192 ./boron -e quit
+ 195725474     121088 ./boron test/func.b
+  50116616     559632 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16043855     246984 ./boron -e loop 10 [load %scripts/m2/m2]
+; serialized boot
+   1139118     108280 ./boron -e quit
+ 195693097     119024 ./boron test/func.b
+  50320636     561864 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16010025     244936 ./boron -e loop 10 [load %scripts/m2/m2]
+; format function
+   1142614     108280 ./boron -e quit
+ 195696593     119024 ./boron test/func.b
+  50580636     556976 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16013627     244936 ./boron -e loop 10 [load %scripts/m2/m2]
+; stack overlow
+   1142400     108296 ./boron -e quit
+ 198248171     119040 ./boron test/func.b
+  50687416     556976 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16013437     244952 ./boron -e loop 10 [load %scripts/m2/m2]
+; boron_doBlock returns UStatus 52b319148
+   1142402     108296 ./boron -e quit
+ 197947926     119040 ./boron test/func.b
+  50684728     556976 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16013438     244952 ./boron -e loop 10 [load %scripts/m2/m2]
+; UBlockIt pointers const cb89c13b0
+   1143323     108296 ./boron -e quit
+ 198924893     119040 ./boron test/func.b
+  50691868     556976 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16014224     244952 ./boron -e loop 10 [load %scripts/m2/m2]
+; sharedStoreBuf pointer
+   1143327     108296 ./boron -e quit
+ 197723875     119040 ./boron test/func.b
+  50634093     556976 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16014208     244952 ./boron -e loop 10 [load %scripts/m2/m2]
+; eval1 INLINE_WORDVAL
+   1143243     108296 ./boron -e quit
+ 196372949     119040 ./boron test/func.b
+  50631349     556976 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16014082     244952 ./boron -e loop 10 [load %scripts/m2/m2]
+; tokenize: Accept 16#[] 128590596
+   1154305     108040 ./boron -e quit
+ 196620898     117488 ./boron test/func.b
+  50675370     553912 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  15882917     242576 ./boron -e loop 10 [load %scripts/m2/m2]
+; ur_tokenizeB
+   1167836     108040 ./boron -e quit
+ 196639169     117424 ./boron test/func.b
+  50459629     553752 ./boron -s scripts/m2/m2 -o /tmp/Makefile
+  16158836     242416 ./boron -e loop 10 [load %scripts/m2/m2]

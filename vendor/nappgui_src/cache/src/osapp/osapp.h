@@ -27,6 +27,8 @@ _osapp_api void osapp_menubar(Menu *menu, Window *window);
 
 _osapp_api void osapp_open_url(const char_t *url);
 
+_osapp_api void osapp_theme_invert(bool_t invert);
+
 __END_C
 
 #define osapp_task(data, updtime, func_main, func_update, func_end, type) \

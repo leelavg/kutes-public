@@ -1,0 +1,66 @@
+Add a prefix to str_copy as multiple libraries are defining their own
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/support/str.c b/support/str.c
+index 2c09985..50652aa 100644
+--- a/support/str.c
++++ b/support/str.c
+@@ -3,7 +3,7 @@
+ /*
+   Returns pointer in 'to' buffer at end of copy.
+ */
+-char* str_copy( char* to, const char* from )
++char* bn_str_copy( char* to, const char* from )
+ {
+     while( *from )
+         *to++ = *from++;
+diff --git a/support/str.h b/support/str.h
+index cade7d1..4a3274c 100644
+--- a/support/str.h
++++ b/support/str.h
+@@ -5,7 +5,7 @@
+ extern "C" {
+ #endif
+ 
+-extern char* str_copy( char* to, const char* from );
++extern char* bn_str_copy( char* to, const char* from );
+ extern const char* str_skipWhite( const char* cp );
+ extern const char* str_toWhite( const char* cp );
+
+diff --git a/eval/boron.c b/eval/boron.c
+index b0d34ae..9994414 100644
+--- a/eval/boron.c
++++ b/eval/boron.c
+@@ -654,13 +654,13 @@ static void _addDatatypeWords( UThread* ut, int typeCount )
+             sig[3] = '0' + (i / 10);
+         sig[4] = '0' + (i % 10);
+ 
+-        cp = str_copy( cp, typeName );
++        cp = bn_str_copy( cp, typeName );
+         cp[-1] = '?';           // Change ! to ?.
+-        cp = str_copy( cp, sig );
++        cp = bn_str_copy( cp, sig );
+ 
+-        cp = str_copy( cp, "to-" );
+-        cp = str_copy( cp, typeName );
+-        cp = str_copy( cp - 1, sig );
++        cp = bn_str_copy( cp, "to-" );
++        cp = bn_str_copy( cp, typeName );
++        cp = bn_str_copy( cp - 1, sig );
+ 
+         *fi++ = cfunc_datatypeQ;
+         *fi++ = cfunc_to_type;
+diff --git a/eval/main.c b/eval/main.c
+index 7a7429d..4ec6027 100644
+--- a/eval/main.c
++++ b/eval/main.c
+@@ -231,7 +231,7 @@ void readEvalPrintLoop( UThread* ut, UBuffer* rstr, int* returnCode )
+                     ur_strTermNull( rstr );
+                     if( rstr->used > PRINT_MAX )
+                     {
+-                        char* cp = str_copy( rstr->ptr.c + PRINT_MAX - 4,
++                        char* cp = bn_str_copy( rstr->ptr.c + PRINT_MAX - 4,
+                                              "..." );
+                         *cp = '\0';
+                     }

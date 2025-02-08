@@ -1,0 +1,202 @@
+Follow color-scheme on gnome, automatic theme switching
+    
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/src/draw2d/draw2d.c b/src/draw2d/draw2d.c
+index 20fbd02..6049020 100644
+--- a/src/draw2d/draw2d.c
++++ b/src/draw2d/draw2d.c
+@@ -169,7 +169,8 @@ color_t color_indexed(const uint16_t index, const color_t color)
+     if (index == 0)
+         return kCOLOR_DEFAULT;
+ 
+-    cassert((uint8_t)(color >> 24) != 0);
++    /* TODO: should be scheme aware */
++    /* cassert((uint8_t)(color >> 24) != 0); */
+ 
+     arrst_foreach(ic, i_INDEXED_COLORS, IColor)
+         if (index == ic->index)
+@@ -454,4 +455,4 @@ const char_t *_draw2d_str_avg_char_width(uint32_t *len)
+     cassert_no_null(len);
+     *len = i_AVG_CHAR_WIDTH_LEN;
+     return i_AVG_CHAR_WIDTH;
+-}
+\ No newline at end of file
++}
+diff --git a/src/osapp/gtk/osapp_gtk.c b/src/osapp/gtk/osapp_gtk.c
+index 1856cbb..604cce4 100644
+--- a/src/osapp/gtk/osapp_gtk.c
++++ b/src/osapp/gtk/osapp_gtk.c
+@@ -14,6 +14,7 @@
+ #include "osapp.inl"
+ #include "osapp_gtk.inl"
+ #include <osgui/osgui.h>
++#include <osgui/osglobals.h>
+ #include <core/event.h>
+ #include <core/strings.h>
+ #include <osbs/bfile.h>
+@@ -30,6 +31,7 @@
+ struct _osapp_t
+ {
+     GtkApplication *gtk_app;
++    GSettings *g_settings;
+     uint32_t argc;
+     char_t **argv;
+     gchar *resources_dir;
+@@ -42,6 +44,7 @@ struct _osapp_t
+     bool_t terminate;
+     bool_t abnormal_termination;
+     bool_t with_run_loop;
++    bool_t theme_changed;
+     Listener *OnTheme;
+     FPtr_app_call func_OnFinishLaunching;
+     FPtr_app_call func_OnTimerSignal;
+@@ -85,9 +88,19 @@ OSApp *_osapp_init_imp(
+     i_APP.terminate = FALSE;
+     i_APP.abnormal_termination = FALSE;
+     i_APP.with_run_loop = with_run_loop;
++    i_APP.theme_changed = FALSE;
+     i_APP.OnTheme = NULL;
+     i_APP.func_OnFinishLaunching = func_OnFinishLaunching;
+     i_APP.func_OnTimerSignal = func_OnTimerSignal;
++    i_APP.g_settings = NULL;
++    {
++        /* TODO: should be replaced with other desktop interfaces?, kde, mate etc */
++        const gchar *schema_id = "org.gnome.desktop.interface";
++        GSettingsSchemaSource *source = g_settings_schema_source_get_default();
++        GSettingsSchema *schema = g_settings_schema_source_lookup(source, schema_id, FALSE);
++        if (schema)
++            i_APP.g_settings = g_settings_new(schema_id);
++    }
+     return &i_APP;
+ }
+ 
+@@ -129,6 +142,9 @@ static void i_terminate(OSApp *app)
+         app->func_destroy(&app->listener);
+     }
+ 
++    if (app->g_settings)
++        g_object_unref(app->g_settings);
++
+     if (app->icon != NULL)
+         g_object_unref(app->icon);
+ 
+@@ -176,6 +192,19 @@ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const u
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++static void update_theme(OSApp *app)
++{
++    gchar *color_scheme = NULL;
++    g_settings_get(app->g_settings, "color-scheme", "s", &color_scheme);
++    g_object_set(gtk_settings_get_default(),
++                 "gtk-application-prefer-dark-theme",
++                 str_equ_c(color_scheme, "prefer-dark"),
++                 NULL);
++    osglobals_theme_changed();
++}
++
++/*---------------------------------------------------------------------------*/
++
+ /* This function will be called repeatedly during the life-cycle of the app
+    until it returns FALSE, at which point the timeout is automatically destroyed
+    and the function will not be called again. */
+@@ -190,6 +219,14 @@ static gboolean i_OnTimerLoop(gpointer data)
+         return FALSE;
+     }
+ 
++    if (app->theme_changed == TRUE)
++    {
++        update_theme(app);
++        if (app->OnTheme != NULL)
++            listener_event(app->OnTheme, 0, (OSApp *)app->listener, NULL, NULL, OSApp, void, void);
++        app->theme_changed = FALSE;
++    }
++
+     if (app->func_OnTimerSignal != NULL)
+         app->func_OnTimerSignal(app->listener);
+ 
+@@ -198,6 +235,15 @@ static gboolean i_OnTimerLoop(gpointer data)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++static void i_OnColorScheme(GSettings *settings, gchar *key, OSApp *osapp)
++{
++    cassert(str_equ_c(key, "color-scheme"));
++    osapp->theme_changed = TRUE;
++    unref(settings);
++}
++
++/*---------------------------------------------------------------------------*/
++
+ /* This function will be called repeatedly until the application is created,
+    at which point the timeout is automatically destroyed and the function will
+    not be called again. */
+@@ -212,6 +258,11 @@ static gboolean i_OnTimerInit(gpointer data)
+         if (app->is_init == FALSE)
+         {
+             app->is_init = TRUE;
++            if (app->g_settings)
++            {
++                update_theme(app);
++                g_signal_connect(i_APP.g_settings, "changed::color-scheme", G_CALLBACK(i_OnColorScheme), (gpointer)&i_APP);
++            }
+             app->func_OnFinishLaunching(app->listener);
+             return FALSE;
+         }
+diff --git a/src/osgui/gtk/osglobals.c b/src/osgui/gtk/osglobals.c
+index 2995b45..9e1278e 100644
+--- a/src/osgui/gtk/osglobals.c
++++ b/src/osgui/gtk/osglobals.c
+@@ -245,7 +245,8 @@ static color_t i_frame_color(GtkWidget *widget, const uint32_t size, const bool_
+ static void i_precompute_colors(void)
+ {
+     real32_t r = 0, g = 0, b = 0;
+-    cassert(kLABEL_COLOR == 0);
++    /* TODO: should be scheme aware */
++    /* cassert(kLABEL_COLOR == 0); */
+     cassert(i_IMPOSTOR_MAPPED == TRUE);
+     kLABEL_COLOR = i_color_prop(kLABEL, "color", GTK_STATE_FLAG_ACTIVE);
+     kVIEW_COLOR = i_color_prop(kWINDOW, "background-color", GTK_STATE_FLAG_NORMAL);
+@@ -544,29 +544,25 @@ color_t osglobals_color(const syscolor_t *color)
+     cassert_no_null(color);
+     cassert(kWINDOW != NULL);
+ 
++    /* TODO: should be scheme aware */
+     switch (*color)
+     {
+     case ekSYSCOLOR_DARKMODE:
+         return kDARK_MODE;
+ 
+     case ekSYSCOLOR_LABEL:
+-        cassert(kLABEL_COLOR != 0);
+         return kLABEL_COLOR;
+ 
+     case ekSYSCOLOR_VIEW:
+-        cassert(kVIEW_COLOR != 0);
+         return kVIEW_COLOR;
+ 
+     case ekSYSCOLOR_LINE:
+-        cassert(kLINE_COLOR != 0);
+         return kLINE_COLOR;
+ 
+     case ekSYSCOLOR_LINK:
+-        cassert(kLINK_COLOR != 0);
+         return kLINK_COLOR;
+ 
+     case ekSYSCOLOR_BORDER:
+-        cassert(kBORD_COLOR != 0);
+         return kBORD_COLOR;
+ 
+         cassert_default();
+@@ -1348,3 +1348,10 @@ void _osglobals_restore_focus(GtkWidget *window, GtkWidget *widget)
+     kRESTORE_FOCUS_WINDOW = window;
+     kRESTORE_FOCUS_WIDGET = widget;
+ }
++
++/*---------------------------------------------------------------------------*/
++
++void osglobals_theme_changed(void)
++{
++    i_precompute_colors();
++}

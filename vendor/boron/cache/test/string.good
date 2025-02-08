@@ -1,0 +1,97 @@
+---- encoding
+latin1
+latin1 ucs2
+#{EFBBBF53C3AE6E65206B6CC3A277656E}
+["Copyright © 1930"]
+["Ā"]
+---- make
+17 ucs2 0 ucs2
+---- append
+"xabc"
+---- insert
+"0string"
+"_abc_string"
+"_abng"
+"stri_abng"
+---- trim
+"trim1"
+"aa bb"
+"aa bb"
+"Line One.^/  Line Two.^/Line Three.^/"
+---- caret escape
+{"}
+"
+{^}"}
+}"
+{^}"}
+}"
+"}"
+}
+["a^/b"]
+---- caret hex
+ucs2 20
+"hash: # AE: Ǣ xai: Ϧ"
+hash: # AE: Ǣ xai: Ϧ
+"hash: # AE: ¿ xai: ¿"
+---- compare
+true
+---- do
+7
+---- change
+""
+"a12345"
+""
+"a^/^/gg^/"
+"bc"
+"zbc"
+""
+"abcz"
+""
+7
+"a12345de"
+"fg"
+"UUfg"
+---- change/part
+"e"
+"12e"
+""
+"12"
+---- remove
+"emove stuff"
+"e stuff"
+"ee stuff"
+---- reverse
+"yxwv"
+"xwvyz"
+---- find
+"winter rests"
+none
+"winter rests"
+ucs2
+"rests"
+"rel in winter rests"
+"rests"
+none
+---- find bitset!
+"/tmp/path/file"
+"\Temp\path\file"
+none
+"/file"
+"\file"
+none
+---- Invalid
+"Invalid 1"
+---- nested brackets
+" {}"
+Syntax Error: String not terminated (line 1)
+Trace:
+ -> do "{ {}"
+---- Auto-unindent
+""
+"int main() {^/    return 0;^/}^/"
+{Item 1
+    * Sub-time A
+    * Sub-time B
+
+}
+"example {{^/    Text^/}}^/"

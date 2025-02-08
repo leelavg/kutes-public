@@ -170,6 +170,15 @@ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const u
 
 /*---------------------------------------------------------------------------*/
 
+void _osapp_theme_invert_imp(OSApp *app, bool_t invert)
+{
+    cassert_no_null(app);
+    cassert(app == &i_APP);
+    unref(invert);
+}
+
+/*---------------------------------------------------------------------------*/
+
 static VOID CALLBACK i_OnTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 {
     cassert(hwnd == NULL);

@@ -1,0 +1,15 @@
+---- basic
+read: 1
+read: true
+read: "Here is some text."
+read: ""
+read: [1 2 3]
+3
+read: [add 4 5]
+9
+read: bye
+Thread exit
+---- join on close
+Echo apple
+Echo ball
+Thread auto-exit

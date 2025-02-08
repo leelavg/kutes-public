@@ -339,6 +339,15 @@ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const u
 
 /*---------------------------------------------------------------------------*/
 
+void _osapp_theme_invert_imp(OSApp *app, bool_t invert)
+{
+    cassert_no_null(app);
+    cassert(cast(app, NSApplication) == NSApp);
+    unref(invert);
+}
+
+/*---------------------------------------------------------------------------*/
+
 void _osapp_run(OSApp *app)
 {
     cassert_no_null(app);

@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+if [ "$1" == "-s" ]; then
+	echo "static const char boot_data[] =" >boot.c
+	boron ../scripts/c_string.b boot.b >>boot.c
+	echo ";" >>boot.c
+else
+	../boron -s -e 'write %/tmp/boot.bin serialize unbind load %boot.b'
+	../scripts/c_binary.b /tmp/boot.bin >boot.c
+	rm /tmp/boot.bin
+fi

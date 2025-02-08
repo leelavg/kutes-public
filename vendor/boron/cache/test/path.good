@@ -1,0 +1,42 @@
+---- make
+path! a/2
+lit-path! 'a/2
+set-path! a/2:
+hij
+"abc"
+none
+---- lit-path
+path! some/path
+path! a/'b word! lit-word!
+---- set-path
+[a [5 (pword)]]
+[1 2 new]
+---- block
+33 44
+cc
+[a 1 b [x 11 y (aa bb 44)]]
+none
+---- integer
+foo word!
+-900 int!
+48 int!
+foo word!
+-99000 int!
+48 int!
+---- get-word
+2
+cog
+sol
+---- get-path
+1
+1
+does [1]
+does [1]
+---- do path
+hi
+hi
+done-with-arg
+done-with-arg
+---- func arg
+mouse
+'B'

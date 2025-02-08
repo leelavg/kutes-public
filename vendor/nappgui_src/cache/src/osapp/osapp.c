@@ -392,6 +392,14 @@ uint32_t osapp_argv(const uint32_t index, char_t *argv, const uint32_t size)
 
 /*---------------------------------------------------------------------------*/
 
+void osapp_theme_invert(bool_t invert)
+{
+    i_App *app = _osapp_listener(i_App);
+    _osapp_theme_invert_imp(app->osapp, invert);
+}
+
+/*---------------------------------------------------------------------------*/
+
 void osapp_task_imp(void *data, const real32_t updtime, FPtr_task_main func_task_main, FPtr_task_update func_task_update, FPtr_task_end func_task_end)
 {
     i_App *app = _osapp_listener(i_App);

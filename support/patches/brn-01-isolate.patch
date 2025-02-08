@@ -1,0 +1,261 @@
+New configure option for remove multiple os related functions
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/eval/boron.c b/eval/boron.c
+index 3fceab1..b0d34ae 100644
+--- a/eval/boron.c
++++ b/eval/boron.c
+@@ -488,11 +488,13 @@ void boron_overrideCFunc( UThread* ut, const char* name, BoronCFunc func )
+         {
+             ((UCellFunc*) cell)->m.func = func;
+ 
++#if !defined(CONFIG_ISOLATE)
+             // Special handling for 'read which is used internally by
+             // 'load (and thus by 'do & boron_load()).
+             if( nameLen == 4 &&
+                 name[0]=='r' && name[1]=='e' && name[2]=='a' && name[3]=='d' )
+                 BENV->funcRead = func;
++#endif
+         }
+     }
+ }
+@@ -779,7 +781,9 @@ UThread* boron_makeEnv( UEnvParameters* par )
+     // Need to override some Urlan methods.
+     dt_context.make = context_make_override;
+ 
++#if !defined(CONFIG_ISOLATE)
+     BENV->funcRead = cfunc_read;
++#endif
+ 
+     ur_internAtoms( ut, "none true false file udp tcp thread"
+         " func | local extern no-trace"
+@@ -793,7 +797,9 @@ UThread* boron_makeEnv( UEnvParameters* par )
+ 
+     // Register ports.
+     ur_ctxInit( &BENV->ports, 4 );
++#if !defined(CONFIG_ISOLATE)
+     boron_addPortDevice( ut, &port_file,   atoms[3] );
++#endif
+ #ifdef CONFIG_SOCKET
+     boron_addPortDevice( ut, &port_socket, atoms[4] );
+     boron_addPortDevice( ut, &port_socket, atoms[5] );
+@@ -900,6 +906,7 @@ const UAtom* boron_compileAtoms( BoronThread* bt )
+ }
+ 
+ 
++#if !defined(CONFIG_ISOLATE)
+ /**
+   Load block! from file and give it default bindings.
+ 
+@@ -937,6 +944,7 @@ UStatus boron_load( UThread* ut, const char* file, UCell* res )
+ #endif
+     return ok;
+ }
++#endif
+ 
+ 
+ /** \enum UserAccess
+diff --git a/eval/boron_types.c b/eval/boron_types.c
+index 2017008..724cce1 100644
+--- a/eval/boron_types.c
++++ b/eval/boron_types.c
+@@ -414,8 +414,10 @@ int port_makeOpt( UThread* ut, const UCell* from, int opt, UCell* res )
+             break;
+ 
+         case UT_INT:
++#if !defined(CONFIG_ISOLATE)
+         case UT_FILE:
+             pdev = &port_file;
++#endif
+             break;
+ 
+         case UT_BLOCK:
+diff --git a/eval/cfunc.c b/eval/cfunc.c
+index 0e88758..b6bd4ec 100644
+--- a/eval/cfunc.c
++++ b/eval/cfunc.c
+@@ -56,6 +56,7 @@ CFUNC(cfunc_nop)
+ }
+ 
+ 
++#if !defined(CONFIG_ISOLATE)
+ /*-cf-
+     quit
+         /return     Returns value as exit status to operating system.
+@@ -96,6 +97,7 @@ CFUNC(cfunc_halt)
+     (void) res;
+     return boron_throwWord( ut, UR_ATOM_HALT, 0 );
+ }
++#endif
+ 
+ 
+ /*-cf-
+@@ -3764,6 +3766,7 @@ static void _printValue(UThread* ut, const UCell* a1, int flags)
+ }
+ 
+ 
++#if !defined(CONFIG_ISOLATE)
+ /*-cf-
+     probe
+         value
+@@ -3838,6 +3841,7 @@ CFUNC(cfunc_print)
+     ur_setId(res, UT_UNSET);
+     return UR_OK;
+ }
++#endif
+ 
+ 
+ /*-cf-
+@@ -3879,6 +3883,7 @@ void ur_setCellI64( UCell* cell, int64_t n )
+ }
+ 
+ 
++#if !defined(CONFIG_ISOLATE)
+ /*-cf-
+     exists?
+         path    file!/string!
+@@ -4190,6 +4195,7 @@ CFUNC(cfunc_open)
+         return port_file.open( ut, &port_file, a1, CFUNC_OPTIONS, res );
+     return port_makeOpt( ut, a1, CFUNC_OPTIONS, res );
+ }
++#endif
+ 
+ 
+ #if 0
+@@ -4214,6 +4220,7 @@ CFUNC(cfunc_close)
+ #endif
+ 
+ 
++#if !defined(CONFIG_ISOLATE)
+ #define OPT_READ_TEXT   0x01
+ #define OPT_READ_INTO   0x02
+ #define OPT_READ_APPEND 0x04
+@@ -4737,6 +4744,7 @@ CFUNC(cfunc_save)
+ 
+     return cfunc_write( ut, args + 1, res );
+ }
++#endif
+ 
+ 
+ /*-cf-
+@@ -5385,6 +5393,7 @@ CFUNC(cfunc_mark_sol)
+ }
+ 
+ 
++#if !defined(CONFIG_ISOLATE)
+ extern double ur_now();
+ 
+ /*-cf-
+@@ -5406,6 +5415,7 @@ CFUNC(cfunc_now)
+     ur_double(res) = ur_now();
+     return UR_OK;
+ }
++#endif
+ 
+ 
+ #include "cpuCounter.h"
+diff --git a/eval/cfunc_table.c b/eval/cfunc_table.c
+index 15215ef..4500398 100644
+--- a/eval/cfunc_table.c
++++ b/eval/cfunc_table.c
+@@ -1,6 +1,8 @@
+ DEF_CF( cfunc_nop,     "nop\n" )
++#if !defined(CONFIG_ISOLATE)
+ DEF_CF( cfunc_quit,    "quit /return val\n" )
+ DEF_CF( cfunc_halt,    "halt\n" )
++#endif
+ DEF_CF( cfunc_exit,    "exit\n" )
+ DEF_CF( cfunc_return,  "return val\n" )
+ DEF_CF( cfunc_break,   "break\n" )
+@@ -41,9 +43,11 @@ DEF_CF( cfunc_reserve, "reserve ser size int!\n" )
+ DEF_CF( cfunc_does,    "does body block!\n" )
+ DEF_CF( cfunc_func,    "func spec block! body block!\n" )
+ DEF_CF( cfunc_mold,    "mold val /contents\n" )
++#if !defined(CONFIG_ISOLATE)
+ DEF_CF( cfunc_probe,   "probe val\n" )
+ DEF_CF( cfunc_prin,    "prin val\n" )
+ DEF_CF( cfunc_print,   "print val\n" )
++#endif
+ DEF_CF( cfunc_to_text, "to-text val\n" )
+ DEF_CF( cfunc_all,     "all val block!\n" )
+ DEF_CF( cfunc_any,     "any val block!\n" )
+@@ -99,6 +103,7 @@ DEF_CF( cfunc_foreach,    "foreach 'w s body 0 /no-trace\n" )
+ DEF_CF( cfunc_foreach,    "remove-each 'w s body 1 /no-trace\n" )
+ DEF_CF( cfunc_forall,     "forall 'w word! body block! /no-trace\n" )
+ DEF_CF( cfunc_map,        "map 'w word! ser body block! /no-trace\n" )
++#if !defined(CONFIG_ISOLATE)
+ DEF_CF( cfunc_infoQ,      "exists? file string!/file! 0\n" )
+ DEF_CF( cfunc_infoQ,      "dir? file string!/file! 1\n" )
+ DEF_CF( cfunc_infoQ,      "info? file string!/file! 2\n" )
+@@ -115,6 +120,7 @@ DEF_CF( cfunc_delete,     "delete file string!/file!\n" )
+ DEF_CF( cfunc_rename,     "rename a string!/file! b string!/file!\n" )
+ DEF_CF( cfunc_load,       "load from\n" )
+ DEF_CF( cfunc_save,       "save to data\n" )
++#endif
+ DEF_CF( cfunc_split,      "split a b /keep\n" )
+ DEF_CF( cfunc_parse,      "parse input binary!/string!/block!"
+                             " rules block! /case\n" )
+@@ -138,16 +144,22 @@ DEF_CF( cfunc_terminate,  "terminate ser val /dir\n" )
+ DEF_CF( cfunc_to_hex,     "to-hex n\n" )
+ DEF_CF( cfunc_to_dec,     "to-dec n\n" )
+ DEF_CF( cfunc_mark_sol,   "mark-sol val /block /clear\n" )
++#if !defined(CONFIG_ISOLATE)
+ DEF_CF( cfunc_now,        "now /date\n" )
++#endif
+ DEF_CF( cfunc_cpu_cycles, "cpu-cycles n int! b block!\n" )
+ DEF_CF( cfunc_free,       "free s\n" )
++#if !defined(CONFIG_ISOLATE)
+ DEF_CF( cfunc_serialize,  "serialize b block!\n" )
+ DEF_CF( cfunc_unserialize,"unserialize b binary!\n" )
++#endif
+ DEF_CF( cfunc_collect,    "collect type datatype! a block!/paren!"
+                             " /unique /into b block!\n" )
+ DEF_CF( cfunc_construct,  "construct s b\n" )
++#if !defined(CONFIG_ISOLATE)
+ DEF_CF( cfunc_sleep,      "sleep n\n" )
+ DEF_CF( cfunc_wait,       "wait b\n" )
++#endif
+ DEF_CF( cfunc_format,     "format s block! a\n" )
+ 
+ #ifdef CONFIG_SOCKET
+diff --git a/eval/eval.c b/eval/eval.c
+index f2925ee..43578e7 100644
+--- a/eval/eval.c
++++ b/eval/eval.c
+@@ -1791,6 +1791,7 @@ CFUNC_PUB( cfunc_do )
+         }
+             break;
+ 
++#if !defined(CONFIG_ISOLATE)
+         case UT_FILE:
+             if (cfunc_load(ut, a1, res) == UR_THROW)
+                 return UR_THROW;
+@@ -1799,6 +1800,7 @@ CFUNC_PUB( cfunc_do )
+             a1 = res;
+             // Fall through to block...
+             /* FALLTHRU */
++#endif
+ 
+         case UT_BLOCK:
+         case UT_PAREN:
+diff --git a/eval/cfunc.c b/eval/cfunc.c
+index b6bd4ec..c9ecf9f 100644
+--- a/eval/cfunc.c
++++ b/eval/cfunc.c
+@@ -3735,6 +3735,7 @@ CFUNC(cfunc_mold)
+ #define stdout  stderr
+ #endif
+ 
++#if !defined(CONFIG_ISOLATE)
+ enum PrintFlags {
+     PrintNewline = 1,
+     PrintAsText  = 2
+@@ -3766,7 +3767,6 @@ static void _printValue(UThread* ut, const UCell* a1, int flags)
+ }
+ 
+ 
+-#if !defined(CONFIG_ISOLATE)
+ /*-cf-
+     probe
+         value

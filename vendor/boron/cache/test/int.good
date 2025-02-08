@@ -1,0 +1,16 @@
+---- tokenize
+[0 0 0 1 -1]
+Script Error: Unset word 'word
+Trace:
+ -> 32 word
+ -> do "32word"
+---- hex
+[0x0 0x10 0xFFFFFFFF]
+int!
+0x0
+---- format
+16 4294967295 -1
+0x10 0xFFFFFFFF 0xFFFFFFFFFFFFFFFF
+---- convert
+-34
+0xFF08F201

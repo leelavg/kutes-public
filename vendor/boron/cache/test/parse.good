@@ -1,0 +1,41 @@
+---- string parse
+eval OK
+true
+token
+---- basic tokenizer
+true
+["some" "words" "..."]
+---- block parse
+true
+[token]
+---- parse into
+true
+["Janet" 38 20.2]
+---- parse into recurse
+true
+[1 2 3 4]
+---- parse into fails
+false
+true
+---- sanity checks
+true
+---- string case
+3
+1
+3
+1
+---- string UCS2
+"Plasma"
+"Plasma"
+---- bits
+ method:8 fcomment:0 fname:1 fextra:0 fcrc:0 ftext:0 timestamp:1127685362 cflags:0 os:3
+---- exception
+Script Error: Unset word 'funcX
+Trace:
+ -> funcX l
+ -> l: thru '^/' :l (funcX l)
+ -> parse "ln1^/ln2^/" [some [
+---- multi-type
+[/transform orthogonal 320,200]
+[/range 2 6]
+true

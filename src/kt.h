@@ -1,5 +1,6 @@
 #pragma once
 
+#include <boron.h>
 #include <yyjson.h>
 #include <nappgui.h>
 
@@ -47,6 +48,8 @@ struct _app_t
     byte_t read_buf[READ_BUFFER];
     byte_t *parse_buf;
     uint32_t parse_size;
+    S2Df dsize;
+    UThread *uthread;
 
     /* control */
     Window *window;
@@ -86,6 +89,23 @@ struct _app_t
     ArrPt(Destroyer) *views;
 };
 
+/*
+    TODO: need an explicit null?
+*/
+typedef enum _type_t
+{
+    ktUNK = 0,
+    ktSTR = 1,
+    ktINT = 2,
+    ktBOOL = 3,
+    ktNUM = 4,
+
+    /* derived types */
+    ktTIM = 5,
+    ktJVAL = 6
+} KDataType;
+DeclSt(KDataType);
+
 extern char_t const *st_ready;
 extern char_t const *st_running;
 extern char_t const *st_stopping;
@@ -107,3 +127,14 @@ void cols_bind(void);
 
 yyjson_alc *alc_init(const char_t *name);
 void alc_dest(yyjson_alc **alc);
+
+/* related to boron evaluator */
+UThread *uthread_create(void);
+void uthread_destroy(UThread **);
+void update_jroot(UThread *, yyjson_mut_val *);
+KDataType boron_eval(UThread *, const char *, UCell **);
+const char *bn_str(UThread *, UCell *);
+int64_t bn_int(UCell *);
+bool_t bn_bool(UCell *);
+double bn_num(UCell *);
+yyjson_mut_val *bn_jval(UThread *, UCell *);

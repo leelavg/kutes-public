@@ -169,7 +169,8 @@ color_t color_indexed(const uint16_t index, const color_t color)
     if (index == 0)
         return kCOLOR_DEFAULT;
 
-    cassert((uint8_t)(color >> 24) != 0);
+    /* TODO: should be scheme aware */
+    /* cassert((uint8_t)(color >> 24) != 0); */
 
     arrst_foreach(ic, i_INDEXED_COLORS, IColor)
         if (index == ic->index)

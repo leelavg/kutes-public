@@ -1,0 +1,56 @@
+---- sort block!
+[1 5 20.0 50.0]
+["goodbye" "hello" "now" "NOW" "then"]
+["NOW" "goodbye" "hello" "now" "then"]
+[alpha beta gamma zulu]
+[0 Apple 1 Box 2 Cat 3 Dog]
+[0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17]
+---- sort field
+[context [
+        part: head
+        size: 1
+        regen: true
+    ] context [
+        part: head
+        size: 2
+        regen: false
+    ] context [
+        other: none
+        part: wing
+        size: 3
+        regen: false
+    ] context [
+        part: wing
+        size: 4
+        regen: false
+    ]]
+[context [
+        part: head
+        size: 2
+        regen: false
+    ] context [
+        part: head
+        size: 1
+        regen: true
+    ] context [
+        part: wing
+        size: 4
+        regen: false
+    ] context [
+        other: none
+        part: wing
+        size: 3
+        regen: false
+    ]]
+[
+    [1 true head]
+    [2 false head]
+    [3 false wing]
+    [4 false wing]
+]
+[
+    [2 false head]
+    [1 true head]
+    [4 false wing]
+    [3 false wing]
+]

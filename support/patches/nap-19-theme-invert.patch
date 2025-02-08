@@ -1,0 +1,149 @@
+Option to invert theme with gtk
+    
+I don't own a Mac and so can't code, test for it
+possible references: 
+https://apple.stackexchange.com/a/347101
+https://developer.apple.com/documentation/appkit/nsappearance/performascurrentdrawingappearance(_:)
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/src/osapp/gtk/osapp_gtk.c b/src/osapp/gtk/osapp_gtk.c
+index 604cce4..8efa525 100644
+--- a/src/osapp/gtk/osapp_gtk.c
++++ b/src/osapp/gtk/osapp_gtk.c
+@@ -45,6 +45,7 @@ struct _osapp_t
+     bool_t abnormal_termination;
+     bool_t with_run_loop;
+     bool_t theme_changed;
++    bool_t theme_invert;
+     Listener *OnTheme;
+     FPtr_app_call func_OnFinishLaunching;
+     FPtr_app_call func_OnTimerSignal;
+@@ -89,6 +90,7 @@ OSApp *_osapp_init_imp(
+     i_APP.abnormal_termination = FALSE;
+     i_APP.with_run_loop = with_run_loop;
+     i_APP.theme_changed = FALSE;
++    i_APP.theme_invert = FALSE;
+     i_APP.OnTheme = NULL;
+     i_APP.func_OnFinishLaunching = func_OnFinishLaunching;
+     i_APP.func_OnTimerSignal = func_OnTimerSignal;
+@@ -195,16 +197,33 @@ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const u
+ static void update_theme(OSApp *app)
+ {
+     gchar *color_scheme = NULL;
++    bool_t dark_theme = FALSE;
+     g_settings_get(app->g_settings, "color-scheme", "s", &color_scheme);
++
++    if (str_equ_c(color_scheme, "prefer-dark"))
++        dark_theme = TRUE;
++    if (app->theme_invert)
++        dark_theme = !dark_theme;
++
+     g_object_set(gtk_settings_get_default(),
+                  "gtk-application-prefer-dark-theme",
+-                 str_equ_c(color_scheme, "prefer-dark"),
++                 dark_theme,
+                  NULL);
+     osglobals_theme_changed();
+ }
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void _osapp_theme_invert_imp(OSApp *app, bool_t invert)
++{
++    cassert_no_null(app);
++    cassert(app == &i_APP);
++    app->theme_invert = invert;
++    app->theme_changed = TRUE;
++}
++
++/*---------------------------------------------------------------------------*/
++
+ /* This function will be called repeatedly during the life-cycle of the app
+    until it returns FALSE, at which point the timeout is automatically destroyed
+    and the function will not be called again. */
+diff --git a/src/osapp/osapp.c b/src/osapp/osapp.c
+index 67abc6e..91177d2 100644
+--- a/src/osapp/osapp.c
++++ b/src/osapp/osapp.c
+@@ -392,6 +392,14 @@ uint32_t osapp_argv(const uint32_t index, char_t *argv, const uint32_t size)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void osapp_theme_invert(bool_t invert)
++{
++    i_App *app = _osapp_listener(i_App);
++    _osapp_theme_invert_imp(app->osapp, invert);
++}
++
++/*---------------------------------------------------------------------------*/
++
+ void osapp_task_imp(void *data, const real32_t updtime, FPtr_task_main func_task_main, FPtr_task_update func_task_update, FPtr_task_end func_task_end)
+ {
+     i_App *app = _osapp_listener(i_App);
+diff --git a/src/osapp/osapp.h b/src/osapp/osapp.h
+index 700f80a..1529db3 100644
+--- a/src/osapp/osapp.h
++++ b/src/osapp/osapp.h
+@@ -27,6 +27,8 @@ _osapp_api void osapp_menubar(Menu *menu, Window *window);
+ 
+ _osapp_api void osapp_open_url(const char_t *url);
+ 
++_osapp_api void osapp_theme_invert(bool_t invert);
++
+ __END_C
+ 
+ #define osapp_task(data, updtime, func_main, func_update, func_end, type) \
+diff --git a/src/osapp/osapp.inl b/src/osapp/osapp.inl
+index 09b609d..ac6f0b0 100644
+--- a/src/osapp/osapp.inl
++++ b/src/osapp/osapp.inl
+@@ -37,6 +37,8 @@ void _osapp_terminate_imp(
+ 
+ uint32_t _osapp_argc_imp(OSApp *app);
+ 
++void _osapp_theme_invert_imp(OSApp *app, bool_t invert);
++
+ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const uint32_t max_size);
+ 
+ void _osapp_run(OSApp *app);
+diff --git a/src/osapp/osx/osapp_osx.m b/src/osapp/osx/osapp_osx.m
+index bc11b27..bd801b5 100644
+--- a/src/osapp/osx/osapp_osx.m
++++ b/src/osapp/osx/osapp_osx.m
+@@ -339,6 +339,15 @@ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const u
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void _osapp_theme_invert_imp(OSApp *app, bool_t invert)
++{
++    cassert_no_null(app);
++    cassert(cast(app, NSApplication) == NSApp);
++    unref(invert);
++}
++
++/*---------------------------------------------------------------------------*/
++
+ void _osapp_run(OSApp *app)
+ {
+     cassert_no_null(app);
+diff --git a/src/osapp/win/osapp_win.c b/src/osapp/win/osapp_win.c
+index b7ebae3..991b934 100644
+--- a/src/osapp/win/osapp_win.c
++++ b/src/osapp/win/osapp_win.c
+@@ -170,6 +170,15 @@ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const u
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void _osapp_theme_invert_imp(OSApp *app, bool_t invert)
++{
++    cassert_no_null(app);
++    cassert(app == &i_APP);
++    unref(invert);
++}
++
++/*---------------------------------------------------------------------------*/
++
+ static VOID CALLBACK i_OnTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
+ {
+     cassert(hwnd == NULL);

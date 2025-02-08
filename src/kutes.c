@@ -1,5 +1,6 @@
 #include "kt.h"
 
+#include <boron.h>
 #include <yyjson.h>
 #include <nappgui.h>
 
@@ -398,20 +399,35 @@ static void i_OnPopupSelect(App *app, Event *e)
     if (p->index != UINT32_MAX)
     {
         adjust_vscroll(app->vscroll, p->index, popup_count(app->vselect));
-        window_update(app->window);
     }
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_OnInvert(App *app, Event *e)
+{
+#if defined(__LINUX__)
+    const EvButton *p = event_params(e, EvButton);
+    osapp_theme_invert(p->state == ekGUI_ON ? true : false);
+#else
+    log_printf("inverting theme not supported");
+    unref(e);
+#endif
+    unref(app);
 }
 
 /*---------------------------------------------------------------------------*/
 
 static Panel *i_panel(App *app)
 {
-    Panel *panel = panel_create();
+    Panel *panel = panel_scroll(TRUE, TRUE);
 
+    Layout *pane = layout_create(1, 1);
     Layout *main = layout_create(1, 3);
     Layout *input = layout_create(1, 2);
     Layout *inops = layout_create(2, 1);
     Layout *vscroll = layout_create(1, 1);
+    Layout *state = layout_create(2, 1);
 
     Font *font = font_monospace(font_regular_size(), ekFNORMAL);
     Edit *cmdin = edit_multiline();
@@ -432,12 +448,15 @@ static Panel *i_panel(App *app)
     TextView *cmderr = textview_create();
 
     Label *status = label_create();
+    Button *theme = button_check();
 
-    panel_size(panel, s2df(960, 900));
+    real32_t width = .7f * app->dsize.width;
+    real32_t height = .8f * app->dsize.height;
+
+    /* on my laptop these sizes are looking good */
+    panel_size(panel, s2df(min_r32(940, width), min_r32(900, height)));
     layout_vsize(input, 0, 50);
     layout_vsize(input, 1, 25);
-    layout_vsize(vscroll, 0, 775);
-    layout_vsize(main, 2, 50);
     layout_margin4(main, 5, 5, 0, 5);
 
     /* edit_phstyle(cmdin, ekFITALIC);
@@ -455,9 +474,8 @@ static Panel *i_panel(App *app)
     popup_OnSelect(vselect, listener(app, i_OnPopupSelect, App));
 
     layout_popup(inops, vselect, 1, 0);
+    layout_hexpand(inops, 1);
 
-    layout_hsize(inops, 0, 960. / 2 - 5);
-    layout_hsize(inops, 1, 960. / 2 - 5);
     layout_layout(input, inops, 0, 1);
 
     layout_layout(main, input, 0, 0);
@@ -519,7 +537,7 @@ static Panel *i_panel(App *app)
     textview_fstyle(cmderr, ekFNORMAL);
     splitview_text(hsplit, cmderr, FALSE);
 
-    splitview_pos(hsplit, .67f);
+    splitview_pos(hsplit, .80f);
 
     layout_splitview(result, hsplit, 0, 1);
 
@@ -529,11 +547,20 @@ static Panel *i_panel(App *app)
     layout_vexpand(main, 1);
 
     label_text(status, st_ready);
+    layout_halign(state, 0, 0, ekJUSTIFY);
 
-    layout_halign(main, 0, 2, ekJUSTIFY);
-    layout_label(main, status, 0, 2);
+    layout_label(state, status, 0, 0);
 
-    panel_layout(panel, main);
+    button_text(theme, "invert");
+    button_OnClick(theme, listener(app, i_OnInvert, App));
+
+    layout_halign(state, 1, 0, ekRIGHT);
+    layout_button(state, theme, 1, 0);
+
+    layout_layout(main, state, 0, 2);
+
+    layout_layout(pane, main, 0, 0);
+    panel_layout(panel, pane);
 
     app->cmdin = cmdin;
     app->run = run;
@@ -569,13 +596,22 @@ static void i_OnClose(App *app, Event *e)
 
 /*---------------------------------------------------------------------------*/
 
+static void i_OnResize(App *app, Event *e)
+{
+    adjust_vscroll(app->vscroll, popup_get_selected(app->vselect), popup_count(app->vselect));
+    unref(e);
+}
+
+/*---------------------------------------------------------------------------*/
+
 static App *i_create(void)
 {
     App *app = heap_new0(App);
     Panel *panel;
     draw2d_preferred_monospace("Noto Sans Mono");
+    app->dsize = gui_resolution();
     panel = i_panel(app);
-    app->window = window_create(ekWINDOW_STD);
+    app->window = window_create(ekWINDOW_STDRES);
     app->pos_cache = arrst_create(uint32_t);
     app->run_state = ktRUN_ENDED;
     app->alc = alc_init("yyjson");
@@ -589,8 +625,12 @@ static App *i_create(void)
     window_panel(app->window, panel);
     window_title(app->window, "kutes");
     window_OnClose(app->window, listener(app, i_OnClose, App));
+    window_OnResize(app->window, listener(app, i_OnResize, App));
     window_show(app->window);
     window_hotkey(app->window, ekKEY_F, ekMKEY_CONTROL, listener(app, i_focus_search, App));
+    app->uthread = uthread_create();
+    cassert_no_null(app->uthread);
+    osapp_theme_invert(TRUE);
     return app;
 }
 
@@ -600,6 +640,8 @@ static void i_destroy(App **app)
 {
     if ((*app)->doc)
         yyjson_mut_doc_free((*app)->doc);
+    if ((*app)->uthread)
+        uthread_destroy(&(*app)->uthread);
     arrpt_destroy(&(*app)->views, viewdata_destroy, Destroyer);
     arrst_destroy(&(*app)->pos_cache, NULL, uint32_t);
     heap_delete_n(&(*app)->parse_buf, (*app)->parse_size, byte_t);
