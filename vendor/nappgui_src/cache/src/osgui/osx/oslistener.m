@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -11,9 +11,9 @@
 /* View listeners */
 
 #include "oslistener.inl"
-#include "osgui.inl"
-#include "osscrolls.inl"
 #include "osgui_osx.inl"
+#include "../osgui.inl"
+#include "../osscrolls.inl"
 #include <core/event.h>
 #include <sewer/bmem.h>
 #include <sewer/cassert.h>

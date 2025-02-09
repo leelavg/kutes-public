@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,12 +10,12 @@
 
 /* Operating System native menu item */
 
-#include "osmenuitem.h"
-#include "osgui.inl"
 #include "osmenu_gtk.inl"
 #include "osmenuitem_gtk.inl"
 #include "oscontrol_gtk.inl"
 #include "osgui_gtk.inl"
+#include "../osmenuitem.h"
+#include "../osgui.inl"
 #include <draw2d/image.h>
 #include <core/event.h>
 #include <core/heap.h>

@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,7 +10,7 @@
 
 /* HTTP request (Cocoa-based implementation) */
 
-#include "oshttpreq.inl"
+#include "../oshttpreq.inl"
 #include <sewer/nowarn.hxx>
 #include <Cocoa/Cocoa.h>
 #include <sewer/warn.hxx>
@@ -29,7 +29,7 @@
 /*---------------------------------------------------------------------------*/
 
 #if defined(MAC_OS_X_VERSION_10_9) && MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_9
-@interface OSXURLDelegate : NSObject <NSURLSessionDelegate, NSURLSessionDataDelegate, NSURLSessionTaskDelegate>
+@interface OSXURLDelegate : NSObject < NSURLSessionDelegate, NSURLSessionDataDelegate, NSURLSessionTaskDelegate >
 {
   @public
     OSHttp *http;

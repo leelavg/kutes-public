@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -777,4 +777,13 @@ String *hfile_home_dir(const char_t *path)
     char_t homedir[512];
     bfile_dir_home(homedir, 512);
     return str_cpath("%s/%s", homedir, path);
+}
+
+/*---------------------------------------------------------------------------*/
+
+String *hfile_tmp_path(const char_t *path)
+{
+    char_t tmpdir[512];
+    bfile_dir_tmp(tmpdir, 512);
+    return str_cpath("%s/%s", tmpdir, path);
 }

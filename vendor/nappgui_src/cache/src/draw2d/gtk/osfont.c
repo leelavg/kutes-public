@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,10 +10,10 @@
 
 /* Fonts */
 
-#include "font.h"
-#include "font.inl"
-#include "dctxh.h"
-#include "draw2d.inl"
+#include "../font.h"
+#include "../font.inl"
+#include "../dctxh.h"
+#include "../draw2d.inl"
 #include <core/arrpt.h>
 #include <core/heap.h>
 #include <core/strings.h>

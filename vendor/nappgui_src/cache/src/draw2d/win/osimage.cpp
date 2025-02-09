@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,13 +10,13 @@
 
 /* Images */
 
-#include "image.inl"
-#include "dctxh.h"
 #include "dctx_win.inl"
-#include "imgutil.inl"
-#include "color.h"
-#include "palette.h"
-#include "pixbuf.h"
+#include "../image.inl"
+#include "../dctxh.h"
+#include "../imgutil.inl"
+#include "../color.h"
+#include "../palette.h"
+#include "../pixbuf.h"
 #include <core/buffer.h>
 #include <core/heap.h>
 #include <core/stream.h>
@@ -43,6 +43,14 @@ struct _osimage_t
 {
     Gdiplus::Bitmap *bitmap;
 };
+
+/*---------------------------------------------------------------------------*/
+
+static IStream *i_SHCreateMemStream(const BYTE *pInit, UINT cbInit)
+{
+    /* TODO: Use i_kSHCreateMemStream in WindowsXP */
+    return SHCreateMemStream(pInit, cbInit);
+}
 
 /*---------------------------------------------------------------------------*/
 
@@ -198,7 +206,7 @@ OSImage *osimage_create_from_data(const byte_t *data, const uint32_t size_in_byt
     Gdiplus::Bitmap *bitmap = NULL;
     cassert_no_null(data);
     cassert(size_in_bytes > 0);
-    stream = i_kSHCreateMemStream(cast_const(data, BYTE), (UINT)size_in_bytes);
+    stream = i_SHCreateMemStream(cast_const(data, BYTE), (UINT)size_in_bytes);
     bitmap = Gdiplus::Bitmap::FromStream(stream, TRUE);
     stream->Release();
 

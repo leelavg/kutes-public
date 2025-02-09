@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -14,11 +14,10 @@
 #include <Cocoa/Cocoa.h>
 #include <sewer/warn.hxx>
 #include "draw2d_osx.ixx"
-
-#include "font.h"
-#include "font.inl"
-#include "draw2d.inl"
-#include "draw.inl"
+#include "../font.h"
+#include "../font.inl"
+#include "../draw2d.inl"
+#include "../draw.inl"
 #include <core/arrpt.h>
 #include <core/strings.h>
 #include <sewer/bmath.h>

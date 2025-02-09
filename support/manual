@@ -46,4 +46,4 @@ table:
 sort, filter not required now
 col search, import & export
 main --> new pane for exploration
-json without spaces increases processing a lot
+json without spaces increases processing speed a lot

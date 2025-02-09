@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,15 +10,15 @@
 
 /* Basic memory system */
 
-#include "bmem.h"
-#include "bmem.inl"
-#include "cassert.h"
+#include "../bmem.h"
+#include "../bmem.inl"
+#include "../cassert.h"
 
 #if !defined(__WINDOWS__)
 #error This file is for Windows
 #endif
 
-#include "nowarn.hxx"
+#include "../nowarn.hxx"
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
@@ -35,7 +35,7 @@
 #endif
 #endif
 
-#include "nowarn.hxx"
+#include "../nowarn.hxx"
 
 #if defined(__MEMORY_SUBSYTEM_CHECKING__)
 

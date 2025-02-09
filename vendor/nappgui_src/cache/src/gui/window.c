@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -543,6 +543,14 @@ void window_stop_modal(Window *window, const uint32_t return_value)
 
 /*---------------------------------------------------------------------------*/
 
+bool_t window_is_visible(const Window *window)
+{
+    cassert_no_null(window);
+    return window->visible;
+}
+
+/*---------------------------------------------------------------------------*/
+
 void window_hotkey(Window *window, const vkey_t key, const uint32_t modifiers, Listener *listener)
 {
     cassert_no_null(window);
@@ -948,14 +956,6 @@ void *_window_ositem(Window *window)
 {
     cassert_no_null(window);
     return window->ositem;
-}
-
-/*---------------------------------------------------------------------------*/
-
-bool_t _window_is_visible(const Window *window)
-{
-    cassert_no_null(window);
-    return (bool_t)window->visible;
 }
 
 /*---------------------------------------------------------------------------*/

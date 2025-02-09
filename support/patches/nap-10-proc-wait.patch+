@@ -22,9 +22,9 @@ index 0441242..cb88954 100644
 @@ -11,6 +11,7 @@
  /* Processes */
  
- #include "bproc.h"
-+#include "bthread.h"
- #include "osbs.inl"
+ #include "../bproc.h"
++#include "../bthread.h"
+ #include "../osbs.inl"
  #include <sewer/bmem.h>
  #include <sewer/cassert.h>
 @@ -23,6 +24,7 @@
@@ -165,9 +165,9 @@ index 736bc26..decbdf0 100644
 +++ b/src/osbs/win/bproc.c
 @@ -12,6 +12,7 @@
  
- #include "osbs.inl"
- #include "bproc.h"
-+#include "bthread.h"
+ #include "../osbs.inl"
+ #include "../bproc.h"
++#include "../bthread.h"
  #include <sewer/bmem.h>
  #include <sewer/cassert.h>
  #include <sewer/ptr.h>

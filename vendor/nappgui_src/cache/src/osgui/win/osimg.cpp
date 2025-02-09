@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -69,7 +69,7 @@ HBITMAP _osimg_hbitmap_cache(const Image *image, COLORREF background, LONG *widt
     if (data == NULL)
     {
         data = heap_new0(OSImgData);
-        image_data((Image *)image, &data, i_imgdata_destroy, OSImgData);
+        image_data(cast(image, Image), &data, i_imgdata_destroy, OSImgData);
         data = image_get_data(image, OSImgData);
     }
 

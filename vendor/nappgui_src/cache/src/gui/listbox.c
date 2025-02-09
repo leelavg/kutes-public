@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -369,7 +369,7 @@ static void i_select(ListBox *listbox, LData *data, const bool_t bymouse)
         text = tc(elem->text);
     }
 
-    _cell_upd_uint32(_view_cell(cast(listbox, View)), data->selected);
+    _cell_update_u32(_view_cell(cast(listbox, View)), data->selected);
 
     if (data->OnSelect != NULL)
     {

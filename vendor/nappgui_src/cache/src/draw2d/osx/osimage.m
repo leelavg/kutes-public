@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -14,10 +14,9 @@
 #include <Cocoa/Cocoa.h>
 #include <sewer/warn.hxx>
 #include "draw2d_osx.ixx"
-
-#include "image.inl"
-#include "dctxh.h"
-#include "pixbuf.h"
+#include "../image.inl"
+#include "../dctxh.h"
+#include "../pixbuf.h"
 #include <core/buffer.h>
 #include <core/heap.h>
 #include <core/stream.h>
@@ -196,7 +195,7 @@ OSImage *osimage_create_scaled(const OSImage *image, const uint32_t new_width, c
     cassert_no_null(src_image);
     cassert([[src_image representations] count] == 1);
     cassert([[[src_image representations] objectAtIndex:0] isKindOfClass:[NSBitmapImageRep class]]);
-    src_bitmap = cast([[(NSImage *)image representations] objectAtIndex:0], NSBitmapImageRep);
+    src_bitmap = cast([[cast(image, NSImage) representations] objectAtIndex:0], NSBitmapImageRep);
     cassert_no_null(src_bitmap);
     dest_bitmap = i_scale_bitmap(src_bitmap, new_width, new_height);
     scaled_image = [[NSImage alloc] initWithSize:NSMakeSize((CGFloat)new_width, (CGFloat)new_height)];

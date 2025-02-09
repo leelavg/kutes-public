@@ -12,12 +12,12 @@ grep -rln '#include <WinInet.h>' | xargs sed -i 's/WinInet.h/wininet.h/'
 Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
 
 diff --git a/src/draw2d/win/draw2d_gdi.ixx b/src/draw2d/win/draw2d_gdi.ixx
-index e15f16e..294e458 100644
+index a345162..2b1abeb 100644
 --- a/src/draw2d/win/draw2d_gdi.ixx
 +++ b/src/draw2d/win/draw2d_gdi.ixx
 @@ -15,7 +15,7 @@
  
- #include <draw2d/draw2d.hxx>
+ #include "../draw2d.hxx"
  #include <sewer/nowarn.hxx>
 -#include <Windows.h>
 +#include <windows.h>
@@ -25,7 +25,7 @@ index e15f16e..294e458 100644
  
  struct _measurestr_t
 diff --git a/src/inet/win/oshttpreq.c b/src/inet/win/oshttpreq.c
-index 5a76201..fb8ff63 100644
+index 232dc25..c1dc490 100644
 --- a/src/inet/win/oshttpreq.c
 +++ b/src/inet/win/oshttpreq.c
 @@ -25,8 +25,8 @@
@@ -40,7 +40,7 @@ index 5a76201..fb8ff63 100644
  
  struct _oshttp_t
 diff --git a/src/osapp/osmain_win.h b/src/osapp/osmain_win.h
-index 5daac22..ffb2dd5 100644
+index 6db7a20..a5978a7 100644
 --- a/src/osapp/osmain_win.h
 +++ b/src/osapp/osmain_win.h
 @@ -11,7 +11,7 @@
@@ -53,7 +53,7 @@ index 5daac22..ffb2dd5 100644
  
  #if (_MSC_VER)
 diff --git a/src/osapp/win/osapp_win.c b/src/osapp/win/osapp_win.c
-index 3104edf..b7ebae3 100644
+index 387a722..e27fd86 100644
 --- a/src/osapp/win/osapp_win.c
 +++ b/src/osapp/win/osapp_win.c
 @@ -23,8 +23,8 @@
@@ -68,7 +68,7 @@ index 3104edf..b7ebae3 100644
  
  struct _osapp_t
 diff --git a/src/osbs/win/bfile.c b/src/osbs/win/bfile.c
-index c26de37..e032e6e 100644
+index d3eac61..5e0eb65 100644
 --- a/src/osbs/win/bfile.c
 +++ b/src/osbs/win/bfile.c
 @@ -22,8 +22,8 @@
@@ -83,7 +83,7 @@ index c26de37..e032e6e 100644
  
  struct _dir_t
 diff --git a/src/osbs/win/bmutex.c b/src/osbs/win/bmutex.c
-index 1e08310..1f45f21 100644
+index 8af11f6..e59edd0 100644
 --- a/src/osbs/win/bmutex.c
 +++ b/src/osbs/win/bmutex.c
 @@ -19,7 +19,7 @@
@@ -96,7 +96,7 @@ index 1e08310..1f45f21 100644
  
  /*---------------------------------------------------------------------------*/
 diff --git a/src/osbs/win/bproc.c b/src/osbs/win/bproc.c
-index cf492ca..c1d85b5 100644
+index 574aae4..14e7a45 100644
 --- a/src/osbs/win/bproc.c
 +++ b/src/osbs/win/bproc.c
 @@ -22,7 +22,7 @@
@@ -109,7 +109,7 @@ index cf492ca..c1d85b5 100644
  
  #define STDIN_READ_CHILD 0
 diff --git a/src/osbs/win/bthread.c b/src/osbs/win/bthread.c
-index eb3ac80..634065a 100644
+index 0bce1f8..b5975b7 100644
 --- a/src/osbs/win/bthread.c
 +++ b/src/osbs/win/bthread.c
 @@ -19,7 +19,7 @@
@@ -122,7 +122,7 @@ index eb3ac80..634065a 100644
  
  /*---------------------------------------------------------------------------*/
 diff --git a/src/osbs/win/btime.c b/src/osbs/win/btime.c
-index e95ac99..88e3d5e 100644
+index 5e4306d..fdf053b 100644
 --- a/src/osbs/win/btime.c
 +++ b/src/osbs/win/btime.c
 @@ -18,7 +18,7 @@
@@ -135,7 +135,7 @@ index e95ac99..88e3d5e 100644
  
  #define EPOCHFILETIME (116444736000000000LL)
 diff --git a/src/osbs/win/dlib.c b/src/osbs/win/dlib.c
-index a70e30c..c6e398e 100644
+index 5b3e3df..e5bab3e 100644
 --- a/src/osbs/win/dlib.c
 +++ b/src/osbs/win/dlib.c
 @@ -22,7 +22,7 @@
@@ -148,7 +148,7 @@ index a70e30c..c6e398e 100644
  
  /*---------------------------------------------------------------------------*/
 diff --git a/src/osbs/win/sinfo.c b/src/osbs/win/sinfo.c
-index eb8cf7c..ac25f61 100644
+index 2568779..6822882 100644
 --- a/src/osbs/win/sinfo.c
 +++ b/src/osbs/win/sinfo.c
 @@ -20,7 +20,7 @@
@@ -170,7 +170,7 @@ index eb8cf7c..ac25f61 100644
  
  #include <sewer/warn.hxx>
 diff --git a/src/osgui/win/oscomwin.c b/src/osgui/win/oscomwin.c
-index 19527fd..54c5384 100644
+index d20854b..3d19dff 100644
 --- a/src/osgui/win/oscomwin.c
 +++ b/src/osgui/win/oscomwin.c
 @@ -23,8 +23,8 @@
@@ -185,7 +185,7 @@ index 19527fd..54c5384 100644
  
  /*---------------------------------------------------------------------------*/
 diff --git a/src/osgui/win/osgui_win.cpp b/src/osgui/win/osgui_win.cpp
-index bf63984..c95c869 100644
+index d302852..e884067 100644
 --- a/src/osgui/win/osgui_win.cpp
 +++ b/src/osgui/win/osgui_win.cpp
 @@ -27,8 +27,8 @@
@@ -200,7 +200,7 @@ index bf63984..c95c869 100644
  #include <gdiplus.h>
  #include <sewer/warn.hxx>
 diff --git a/src/osgui/win/osimglist.c b/src/osgui/win/osimglist.c
-index 29dcd72..e9c5ddc 100644
+index b4d9db7..62936db 100644
 --- a/src/osgui/win/osimglist.c
 +++ b/src/osgui/win/osimglist.c
 @@ -20,7 +20,7 @@
@@ -213,7 +213,7 @@ index 29dcd72..e9c5ddc 100644
  
  struct _osimglist_t
 diff --git a/src/osgui/win/osprogress.c b/src/osgui/win/osprogress.c
-index ab554b5..05ce058 100644
+index 2fe8fe0..0d305d9 100644
 --- a/src/osgui/win/osprogress.c
 +++ b/src/osgui/win/osprogress.c
 @@ -22,7 +22,7 @@
@@ -226,7 +226,7 @@ index ab554b5..05ce058 100644
  
  struct _osprogress_t
 diff --git a/src/osgui/win/osslider.c b/src/osgui/win/osslider.c
-index a211714..4b70037 100644
+index f7cb1ec..163856e 100644
 --- a/src/osgui/win/osslider.c
 +++ b/src/osgui/win/osslider.c
 @@ -26,7 +26,7 @@
@@ -239,7 +239,7 @@ index a211714..4b70037 100644
  
  struct _osslider_t
 diff --git a/src/osgui/win/ostext.c b/src/osgui/win/ostext.c
-index 2c80255..7ddf3de 100644
+index 7fe8fc8..ef76b7c 100644
 --- a/src/osgui/win/ostext.c
 +++ b/src/osgui/win/ostext.c
 @@ -31,7 +31,7 @@
@@ -252,7 +252,7 @@ index 2c80255..7ddf3de 100644
  
  struct _ostext_t
 diff --git a/src/osgui/win/ostooltip.c b/src/osgui/win/ostooltip.c
-index d3ce605..f610497 100644
+index 25d3844..cebf83f 100644
 --- a/src/osgui/win/ostooltip.c
 +++ b/src/osgui/win/ostooltip.c
 @@ -20,7 +20,7 @@
@@ -265,7 +265,7 @@ index d3ce605..f610497 100644
  
  /*---------------------------------------------------------------------------*/
 diff --git a/src/osgui/win/osupdown.c b/src/osgui/win/osupdown.c
-index 22d3fe8..664cce9 100644
+index 7098ce4..656ad53 100644
 --- a/src/osgui/win/osupdown.c
 +++ b/src/osgui/win/osupdown.c
 @@ -26,7 +26,7 @@
@@ -278,7 +278,7 @@ index 22d3fe8..664cce9 100644
  
  struct _osupdown_t
 diff --git a/src/osgui/win/osview.cpp b/src/osgui/win/osview.cpp
-index f43c5e9..40d16c9 100644
+index 394cea5..2613fd6 100644
 --- a/src/osgui/win/osview.cpp
 +++ b/src/osgui/win/osview.cpp
 @@ -36,7 +36,7 @@
@@ -291,15 +291,15 @@ index f43c5e9..40d16c9 100644
  
  struct _osview_t
 diff --git a/src/sewer/win/bstdimp.c b/src/sewer/win/bstdimp.c
-index e3cda3d..08bef97 100644
+index ae4448f..9e44a09 100644
 --- a/src/sewer/win/bstdimp.c
 +++ b/src/sewer/win/bstdimp.c
 @@ -22,7 +22,7 @@
  #endif
  
- #include "nowarn.hxx"
+ #include "../nowarn.hxx"
 -#include <Windows.h>
 +#include <windows.h>
  #include <stdio.h>
- #include "warn.hxx"
+ #include "../warn.hxx"
  

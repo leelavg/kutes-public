@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,11 +10,11 @@
 
 /* Cocoa text label */
 
-#include "oslabel.h"
 #include "oslabel_osx.inl"
 #include "oslistener.inl"
 #include "oscontrol_osx.inl"
 #include "ospanel_osx.inl"
+#include "../oslabel.h"
 #include <geom2d/t2d.h>
 #include <draw2d/color.h>
 #include <draw2d/dctx.h>

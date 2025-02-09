@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,13 +10,13 @@
 
 /* Operating System native updown */
 
-#include "osupdown.h"
-#include "osupdown.inl"
-#include "osgui.inl"
 #include "osglobals_gtk.inl"
 #include "oscontrol_gtk.inl"
 #include "ospanel_gtk.inl"
 #include "oswindow_gtk.inl"
+#include "../osupdown.h"
+#include "../osupdown.inl"
+#include "../osgui.inl"
 #include <core/event.h>
 #include <core/heap.h>
 #include <sewer/cassert.h>

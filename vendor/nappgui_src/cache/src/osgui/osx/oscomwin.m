@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,9 +10,9 @@
 
 /* Operating System native common windows */
 
-#include "oscomwin.h"
-#include "oscomwin.inl"
 #include "oscontrol_osx.inl"
+#include "oscomwin.inl"
+#include "../oscomwin.h"
 #include <core/event.h>
 #include <core/strings.h>
 #include <sewer/cassert.h>
@@ -31,7 +31,7 @@
 
 static void i_set_ftypes(NSSavePanel *panel, const char_t **ftypes, const uint32_t size)
 {
-    NSMutableArray<UTType *> *array = [NSMutableArray array];
+    NSMutableArray< UTType * > *array = [NSMutableArray array];
 
     if (ftypes != NULL && size > 0)
     {

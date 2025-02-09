@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -319,24 +319,33 @@ String *str_relpath(const platform_t platform, const char_t *path1, const char_t
     if (prefix > 0)
     {
         uint32_t s1 = str_len_c(path1);
-        uint32_t i, n = 0;
-        str = str_c("");
 
-        prefix -= 1;
-        while (path1[prefix] != '/' && path1[prefix] != '\\')
-            prefix -= 1;
-
-        while (s1 >= prefix)
+        /* path2 is a subpath/file of path1 */
+        if (prefix == s1)
         {
-            if (path1[s1] == '/' || path1[s1] == '\\')
-                n += 1;
-            s1--;
+            str = str_c(path2 + s1);
         }
+        else
+        {
+            uint32_t i = 0, n = 1, ii = prefix;
 
-        for (i = 0; i < n; ++i)
-            str_cat(&str, "../");
+            if (path1[s1 - 1] == '/' || path1[s1 - 1] == '\\')
+                str = str_c("");
+            else
+                str = str_c("/");
 
-        str_cat(&str, path2 + prefix + 1);
+            while (path1[ii] != 0)
+            {
+                if ((path1[ii] == '/' || path1[ii] == '\\') && ii < s1 - 1)
+                    n += 1;
+                ii += 1;
+            }
+
+            for (i = 0; i < n; ++i)
+                str_cat(&str, "../");
+
+            str_cat(&str, path2 + prefix);
+        }
     }
     else
     {
@@ -1321,12 +1330,28 @@ uint64_t str_to_u64(const char_t *str, const uint32_t base, bool_t *error)
 
 real32_t str_to_r32(const char_t *str, bool_t *error)
 {
-    return blib_strtof(str, NULL, error);
+    char_t *end = NULL;
+    real32_t r = blib_strtof(str, &end, error);
+    if (end != NULL && end[0] != 0)
+    {
+        ptr_assign(error, TRUE);
+        return 0;
+    }
+
+    return r;
 }
 
 /*---------------------------------------------------------------------------*/
 
 real64_t str_to_r64(const char_t *str, bool_t *error)
 {
-    return blib_strtod(str, NULL, error);
+    char_t *end = NULL;
+    real64_t r = blib_strtod(str, &end, error);
+    if (end != NULL && end[0] != 0)
+    {
+        ptr_assign(error, TRUE);
+        return 0;
+    }
+
+    return r;
 }

@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,10 +10,6 @@
 
 /* Operating System native window */
 
-#include "oswindow.h"
-#include "oswindow.inl"
-#include "oscontrol.inl"
-#include "ostabstop.inl"
 #include "osgui_gtk.inl"
 #include "oscontrol_gtk.inl"
 #include "osbutton_gtk.inl"
@@ -23,6 +19,10 @@
 #include "osmenu_gtk.inl"
 #include "ospanel_gtk.inl"
 #include "oswindow_gtk.inl"
+#include "../oswindow.h"
+#include "../oswindow.inl"
+#include "../oscontrol.inl"
+#include "../ostabstop.inl"
 #include <core/arrpt.h>
 #include <core/arrst.h>
 #include <core/event.h>
@@ -675,8 +675,8 @@ void oswindow_launch(OSWindow *window, OSWindow *parent_window)
         window->role = ekGUI_ROLE_MAIN;
     }
 
-    /* if (window->header)
-        gtk_widget_show(window->header); */
+   /* if (window->header)
+       gtk_widget_show(window->header); */
     gtk_widget_show(window->control.widget);
     _ostabstop_restore(&window->tabstop);
 }

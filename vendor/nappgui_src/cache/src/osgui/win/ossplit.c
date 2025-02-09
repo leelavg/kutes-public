@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,12 +10,12 @@
 
 /* Operating System split view */
 
-#include "ossplit.h"
-#include "osgui.inl"
 #include "osgui_win.inl"
 #include "oscontrol_win.inl"
 #include "oslistener.inl"
 #include "ospanel_win.inl"
+#include "../ossplit.h"
+#include "../osgui.inl"
 #include <core/event.h>
 #include <core/heap.h>
 #include <sewer/cassert.h>

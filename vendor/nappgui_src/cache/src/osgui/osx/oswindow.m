@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,16 +10,16 @@
 
 /* Cocoa NSwindow wrapper */
 
-#include "oswindow.h"
-#include "oswindow.inl"
 #include "osbutton_osx.inl"
 #include "oscontrol_osx.inl"
 #include "osgui_osx.inl"
 #include "ospanel_osx.inl"
 #include "osview_osx.inl"
 #include "oswindow_osx.inl"
-#include "oscontrol.inl"
-#include "ostabstop.inl"
+#include "../oswindow.h"
+#include "../oswindow.inl"
+#include "../oscontrol.inl"
+#include "../ostabstop.inl"
 #include <core/arrpt.h>
 #include <core/arrst.h>
 #include <core/event.h>
@@ -63,7 +63,7 @@
 /*---------------------------------------------------------------------------*/
 
 #if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED > MAC_OS_X_VERSION_10_5
-@interface OSXWindowDelegate : NSObject <NSWindowDelegate>
+@interface OSXWindowDelegate : NSObject < NSWindowDelegate >
 #else
 @interface OSXWindowDelegate : NSObject
 #endif

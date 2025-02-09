@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,8 +10,8 @@
 
 /* Drawing custom GUI controls */
 
-#include "osdrawctrl.h"
 #include "osglobals_gtk.inl"
+#include "../osdrawctrl.h"
 #include <draw2d/draw.h>
 #include <draw2d/dctxh.h>
 #include <draw2d/font.h>

@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,14 +10,14 @@
 
 /* Operating System native text view */
 
-#include "ostext.h"
-#include "ostext.inl"
 #include "osglobals_gtk.inl"
 #include "oscontrol_gtk.inl"
 #include "ospanel_gtk.inl"
 #include "ossplit_gtk.inl"
 #include "ostext_gtk.inl"
 #include "oswindow_gtk.inl"
+#include "../ostext.h"
+#include "../ostext.inl"
 #include <draw2d/color.h>
 #include <draw2d/font.h>
 #include <core/event.h>

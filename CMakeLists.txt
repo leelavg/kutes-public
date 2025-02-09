@@ -4,7 +4,7 @@
 # 3. MacOSX aarch64 build on linux via podman
 # 4. MacOSX amd64 build on linux via podman
 
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.22.0 FATAL_ERROR)
 project(
   kutes
   VERSION 0.0.1
@@ -17,25 +17,29 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CPM_SOURCE_CACHE vendor/)
 file(
   DOWNLOAD
-  https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.2/CPM.cmake
+  https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.5/CPM.cmake
   ${CMAKE_CURRENT_SOURCE_DIR}/support/CPM.cmake
-  EXPECTED_HASH SHA256=c8cdc32c03816538ce22781ed72964dc864b2a34a310d3b7104812a5ca2d835d
+  EXPECTED_HASH SHA256=c46b876ae3b9f994b4f05a4c15553e0485636862064f1fcc9d8b4f832086bc5d
 )
 include(${CMAKE_CURRENT_SOURCE_DIR}/support/CPM.cmake)
 CPMAddPackage(
   NAME yyjson
-  # commit is on Sep 30, 2024
-  URL https://github.com/ibireme/yyjson/archive/c3af82b.tar.gz
-  URL_HASH SHA256=a4ba556d0478a805d4e2d9163700afba699a986d3f1805422dc535cbe0b05e50
+  # commit is on Jan 25, 2025
+  URL https://github.com/ibireme/yyjson/archive/61c03f6.tar.gz
+  URL_HASH SHA256=dd026202f927b1275f291cd8fedd02015588953e2642f43bd4eebf43f3951edd
   DOWNLOAD_ONLY TRUE
   CUSTOM_CACHE_KEY cache
 )
+# files ending and meaning
+# - not used anymore
+# + individual patches
+# *-checkpoint-<commit>-patch clubbing of all individual patches which can be applied directly on that src commit
 file(GLOB NAP_PATCHES "support/patches/nap-*.patch")
 CPMAddPackage(
   NAME nappgui_src
-  # commit is on Nov 28, 2024
-  URL https://github.com/frang75/nappgui_src/archive/50887ca.tar.gz
-  URL_HASH SHA256=07b439b4aac034ec0912be38f51c637eacb61203bbea106b1704228d6ce5a74c
+  # commit is on Feb 9, 2025
+  URL https://github.com/frang75/nappgui_src/archive/8639d19.tar.gz
+  URL_HASH SHA256=c6aef21a5dedacb737a9579b23337eeaf5a6d24b953fb06fb69220697ba93eb1
   PATCHES ${NAP_PATCHES}
   DOWNLOAD_ONLY TRUE
   CUSTOM_CACHE_KEY cache
@@ -77,5 +81,4 @@ if (boron_ADDED)
   add_subdirectory(${boron_SOURCE_DIR} EXCLUDE_FROM_ALL SYSTEM)
 endif()
 
-# add_subdirectory(src)
 add_subdirectory(src)

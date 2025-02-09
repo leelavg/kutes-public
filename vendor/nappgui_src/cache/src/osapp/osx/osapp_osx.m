@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,9 +10,9 @@
 
 /* Application runloop */
 
-#include "osapp.h"
-#include "osapp.inl"
 #include "osapp_osx.inl"
+#include "../osapp.h"
+#include "../osapp.inl"
 #include <osgui/osglobals.h>
 #include <core/event.h>
 #include <osbs/log.h>
@@ -24,7 +24,7 @@
 #endif
 
 #if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED > MAC_OS_X_VERSION_10_5
-@interface OSXAppDelegate : NSObject <NSApplicationDelegate>
+@interface OSXAppDelegate : NSObject < NSApplicationDelegate >
 #else
 @interface OSXAppDelegate : NSObject
 #endif

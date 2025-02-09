@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,13 +10,13 @@
 
 /* Drawing commands */
 
-#include "draw.h"
-#include "dctxh.h"
-#include "draw.inl"
 #include "dctx_gtk.inl"
 #include "osimage.inl"
-#include "color.h"
-#include "font.h"
+#include "../draw.h"
+#include "../dctxh.h"
+#include "../draw.inl"
+#include "../color.h"
+#include "../font.h"
 #include <sewer/cassert.h>
 #include <sewer/ptr.h>
 

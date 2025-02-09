@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,10 +10,10 @@
 
 /* Operating System native scrollbar */
 
-#include "osscroll.inl"
 #include "osscroll_osx.inl"
 #include "oscontrol_osx.inl"
 #include "osview_osx.inl"
+#include "../osscroll.inl"
 #include <core/heap.h>
 #include <sewer/cassert.h>
 

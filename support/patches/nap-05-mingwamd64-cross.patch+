@@ -44,19 +44,6 @@ diff --git a/prj/NAppTarget.cmake b/prj/NAppTarget.cmake
 index 2e6846a..7e99bdb 100644
 --- a/prj/NAppTarget.cmake
 +++ b/prj/NAppTarget.cmake
-@@ -381,7 +381,11 @@ function(nap_resource_packs targetName targetType nrcMode dir _resFiles _resIncl
-                 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/res.rc "APPLICATION_ICON ICON \"res\\\\logo48.ico\"\n")
-                 set(globalRes ${resPath}/logo48.ico)
-             else()
--                file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/res.rc "APPLICATION_ICON ICON \"res\\\\logo256.ico\"\n")
-+                if(${CMAKE_CROSSCOMPILING})
-+                    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/res.rc "APPLICATION_ICON ICON \"res/logo256.ico\"\n")
-+                else ()
-+                    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/res.rc "APPLICATION_ICON ICON \"res\\\\logo256.ico\"\n")
-+                endif()
-                 set(globalRes ${resPath}/logo256.ico)
-             endif()
- 
 @@ -453,6 +457,14 @@ function(nap_resource_packs targetName targetType nrcMode dir _resFiles _resIncl
  
              file(TO_NATIVE_PATH ${resPackPath} RESPACK_NATIVE)

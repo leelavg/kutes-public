@@ -1,23 +1,72 @@
 # NAppGUI Changelog
 
-## v1.5.0 - WIP
+## v1.5.1 - WIP
+
+### Added
+
+- `window_is_visible()`. [Issue](https://github.com/frang75/nappgui_src/issues/173). [Commit](https://github.com/frang75/nappgui_src/commit/a415b4f3db1abd6d147f5a35d103debb6973e629).
+- `ekGUI_SCALE_ADJUST` to `gui_scale_t`, for `imageview_scale()`. [Commit](https://github.com/frang75/nappgui_src/commit/814e28b45ac1cbf91b70de412f55724b819e158a).
+- `button_min_width()`.
+- `edit_min_width()`.
+- `button_get_font()`.
+
+### Fixed
+
+- `popup_clear()` issue in macOS. [Issue](https://github.com/frang75/nappgui_src/issues/123). [Commit](https://github.com/frang75/nappgui_src/commit/b61c5cdda50b1587646c6b2fa7df3a99b8a25741).
+- `json_write()` issue with `null` values. [Issue](https://github.com/frang75/nappgui_src/issues/175). [Commit](https://github.com/frang75/nappgui_src/commit/d2baa3f2823aeebf554f7492cad205b7ca29a7ca).
+- Issue in NRC generated string with new lines. [Issue](https://github.com/frang75/nappgui_src/issues/177). [Commit](https://github.com/frang75/nappgui_src/commit/c4359a9ff45e5c54547048f1046d64d5f22e987a).
+- Issue in `str_relpath()`. [Commit](https://github.com/frang75/nappgui_src/commit/b34b6832c361ada1acc3a6a3235ea2fa65a71d88).
+
+## v1.5.0 - Jan 1, 2025 (r5810)
 
 ### Added
 
 - `.clang-format` file. [Issue](https://github.com/frang75/nappgui_src/issues/161). [Commit](https://github.com/frang75/nappgui_src/commit/40356b8b17a7cb1f39c2bdfa3c7d4e8ce6ef35d8).
-- `arrst_insert_n0()`. [Doc](). [Commit]().
-- `listbox_del_elem()`. [Doc](). [Commit]().
-- `bfile_rename()`. [Doc](). [Commit]().
+- `arrst_insert_n0()`. [Doc](https://nappgui.com/en/core/arrst.html#f24). [Commit](https://github.com/frang75/nappgui_src/commit/50887ca89b6a844f6b683ca1d2937f3a03cfb004).
+- `listbox_del_elem()`. [Doc](https://nappgui.com/en/gui/listbox.html#f9). [Commit](https://github.com/frang75/nappgui_src/commit/50887ca89b6a844f6b683ca1d2937f3a03cfb004).
+- `bfile_rename()`. [Doc](https://nappgui.com/en/osbs/bfile.html#f21). [Commit](https://github.com/frang75/nappgui_src/commit/50887ca89b6a844f6b683ca1d2937f3a03cfb004).
+- Improved support for data binding [Doc](https://nappgui.com/en/core/dbind.html). [Commit](https://github.com/frang75/nappgui_src/commit/ed4d43572d6c93ca6ee1ddfbe00d8640a519fa76).
+    * Added `core::dbindst_t` result type.
+    * `dbind()` returns now `dbindst_t`.
+    * `dbind_enum()` returns now `dbindst_t`.
+    * Added `dbind_binary()`.
+    * Added `dbind_alias()`.
+    * Added `dbind_unreg()`.
+    * Added `dbind_copy()`.
+    * Added `dbind_cmp()`.
+    * Added `dbind_equ()`.
+    * Added `json_read_str()`.
+    * Added `json_write_str()`.
+    * Added `buffer_read()`.
+    * Added `buffer_write()`.
+    * Added `JsonOpts` new field `ArrPt(String) *log`.
+- `bfile_dir_tmp()`. [Commit](https://github.com/frang75/nappgui_src/commit/f7b5470cbcabeb7bceb27268f718ccd118a7b9c0).
+- `hfile_tmp_path()`. [Commit](https://github.com/frang75/nappgui_src/commit/f7b5470cbcabeb7bceb27268f718ccd118a7b9c0).
+- `b64_encode_from_stm`. [Commit](https://github.com/frang75/nappgui_src/commit/f7b5470cbcabeb7bceb27268f718ccd118a7b9c0).
+- `b64_encode_from_file`. [Commit](https://github.com/frang75/nappgui_src/commit/f7b5470cbcabeb7bceb27268f718ccd118a7b9c0).
+- `b64_decode_from_str`. [Commit](https://github.com/frang75/nappgui_src/commit/f7b5470cbcabeb7bceb27268f718ccd118a7b9c0).
+- `b64_decode_from_data`. [Commit](https://github.com/frang75/nappgui_src/commit/f7b5470cbcabeb7bceb27268f718ccd118a7b9c0).
+- `b64_encode_from_data`. [Commit](https://github.com/frang75/nappgui_src/commit/f7b5470cbcabeb7bceb27268f718ccd118a7b9c0).
+
+### Changed
+
+- `SetSt()`, `SetPt()` use compare-key instead compare-objects. [Commit](https://github.com/frang75/nappgui_src/commit/ed4d43572d6c93ca6ee1ddfbe00d8640a519fa76).
 
 ### Fixed
 
 - Issue in `Layout` when window becomes very small. [Commit](https://github.com/frang75/nappgui_src/commit/3d616fa82e072b6c46f4cf196df0516912ab634c).
 - Issue in `bmath_prec()`. [Commit](https://github.com/frang75/nappgui_src/commit/062d2a69ea187c2c983b0db02f022a7552295a19).
-- Vulnerability in `str_upd()`. [Commit]().
+- Vulnerability in `str_upd()`. [Commit](https://github.com/frang75/nappgui_src/commit/50887ca89b6a844f6b683ca1d2937f3a03cfb004).
+- Issue in `dlib_open()` in macOS. [Issue](https://github.com/frang75/nappgui_src/issues/164). [Commit](https://github.com/frang75/nappgui_src/commit/393f098c8153dba0282546cb48b47b4dbe4fc217).
+- Issue in `heap_realloc_n()` macro parenthesis. [Issue](https://github.com/frang75/nappgui_src/issues/166). [Commit](https://github.com/frang75/nappgui_src/commit/7653f529f15d8e748d47ef3772ac349ddd6f4231).
 
 ### Improved
 
 - Refactor code using `cast()` macro for pointer conversion. [Commit](https://github.com/frang75/nappgui_src/commit/569e797f74f94c54b81d6b7f5f3bd56e43f812c0), [Commit](https://github.com/frang75/nappgui_src/commit/79c15ce90743d9f58488e10d41a992613ebb092e), [Commit](https://github.com/frang75/nappgui_src/commit/dd459fbe248735fef5ba08f71ca77325b55e5bde).
+
+### Build system
+
+- Avoid NAppGUI library paths used as global headers search path. [Issue](https://github.com/frang75/nappgui_src/issues/153). [Commit](https://github.com/frang75/nappgui_src/commit/07b481226c16974707b83ecad6ac5554af5b2f34).
 
 ## v1.4.3 - Oct 12, 2024 (r5533)
 

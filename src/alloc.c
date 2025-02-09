@@ -2,7 +2,7 @@
  a proxy allocator providing malloc api on top of sdk for auditing memory,
  only single threaded at the moment.
 */
-#include <kt.h>
+#include "kt.h"
 
 #include <yyjson.h>
 
@@ -32,9 +32,9 @@ static void *sdk_malloc(void *ctx, size_t size)
     void *ptr = heap_malloc_imp(size, ct->name, FALSE);
 
     key.ptr = ptr;
-    val = setst_insert(ct->set, &key, addr);
+    val = setst_insert(ct->set, &key, addr, addr);
     if (!val)
-        val = setst_get(ct->set, &key, addr);
+        val = setst_get(ct->set, &key, addr, addr);
     val->ptr = ptr;
     val->size = size;
     return ptr;
@@ -49,14 +49,14 @@ static void *sdk_realloc(void *ctx, void *ptr, size_t old_size, size_t size)
     key.ptr = ptr;
     if (ptr == newptr)
     {
-        val = setst_get(ct->set, &key, addr);
+        val = setst_get(ct->set, &key, addr, addr);
         cassert_no_null(val);
     }
     else
     {
-        setst_delete(ct->set, &key, NULL, addr);
+        setst_delete(ct->set, &key, NULL, addr, addr);
         key.ptr = newptr;
-        val = setst_insert(ct->set, &key, addr);
+        val = setst_insert(ct->set, &key, addr, addr);
         val->ptr = newptr;
     }
     val->size = size;
@@ -68,10 +68,10 @@ static void sdk_free(void *ctx, void *ptr)
     context *ct = cast(ctx, context);
     addr *val, key;
     key.ptr = ptr;
-    val = setst_get(ct->set, &key, addr);
+    val = setst_get(ct->set, &key, addr, addr);
     cassert_no_null(val);
     heap_free(dcast(&ptr, byte_t), val->size, ct->name);
-    setst_delete(ct->set, &key, NULL, addr);
+    setst_delete(ct->set, &key, NULL, addr, addr);
 }
 
 static int addr_cmp(const addr *a, const addr *b)
@@ -93,7 +93,7 @@ yyjson_alc *alc_init(const char_t *name)
     alc->free = sdk_free;
 
     str_copy_c(ct->name, MAX_NAME_LEN, name);
-    ct->set = setst_create(addr_cmp, addr);
+    ct->set = setst_create(addr_cmp, addr, addr);
     alc->ctx = ct;
     return alc;
 }

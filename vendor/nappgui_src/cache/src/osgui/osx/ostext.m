@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -11,13 +11,13 @@
 /* Cocoa NSTextView wrapper */
 
 #include "osgui_osx.inl"
-#include "ostext.h"
 #include "ostext_osx.inl"
 #include "oscontrol_osx.inl"
 #include "ospanel_osx.inl"
 #include "oswindow_osx.inl"
-#include "osgui.inl"
 #include "oscolor.inl"
+#include "../ostext.h"
+#include "../osgui.inl"
 #include <draw2d/color.h>
 #include <draw2d/font.h>
 #include <core/event.h>
@@ -182,7 +182,7 @@ static void i_replace_seltext(OSXTextView *lview, NSRange range, const char_t *t
 /*---------------------------------------------------------------------------*/
 
 #if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED > MAC_OS_X_VERSION_10_5
-@interface OSXTextViewDelegate : NSObject <NSTextViewDelegate>
+@interface OSXTextViewDelegate : NSObject < NSTextViewDelegate >
 #else
 @interface OSXTextViewDelegate : NSObject
 #endif

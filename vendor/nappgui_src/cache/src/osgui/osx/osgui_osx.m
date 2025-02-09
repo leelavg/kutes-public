@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -12,9 +12,9 @@
 
 #include "osgui_osx.inl"
 #include "oscontrol_osx.inl"
-#include "osgui.inl"
 #include "osglobals.inl"
 #include "oscomwin.inl"
+#include "../osgui.inl"
 #include <sewer/cassert.h>
 
 #if !defined(__MACOS__)

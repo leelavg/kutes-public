@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -11,8 +11,8 @@
 /* Cocoa NSMenuItem wrapper */
 
 #include "osgui_osx.inl"
-#include "osmenuitem.h"
-#include "osgui.inl"
+#include "../osmenuitem.h"
+#include "../osgui.inl"
 #include <draw2d/image.h>
 #include <core/event.h>
 #include <core/heap.h>

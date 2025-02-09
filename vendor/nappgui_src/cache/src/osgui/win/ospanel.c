@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,8 +10,6 @@
 
 /* Operating System native panel */
 
-#include "ospanel.h"
-#include "ospanel.inl"
 #include "osgui_win.inl"
 #include "oscontrol_win.inl"
 #include "osbutton_win.inl"
@@ -23,8 +21,10 @@
 #include "osscroll_win.inl"
 #include "ostext_win.inl"
 #include "osupdown_win.inl"
-#include "oscontrol.inl"
-#include "osscrolls.inl"
+#include "../ospanel.h"
+#include "../ospanel.inl"
+#include "../oscontrol.inl"
+#include "../osscrolls.inl"
 #include <draw2d/color.h>
 #include <core/arrpt.h>
 #include <core/arrst.h>

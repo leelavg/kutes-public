@@ -1,4 +1,4 @@
-#include <kt.h>
+#include "kt.h"
 
 /* shared constants, probably be moved to resource pack but unlikely as other than English may not be supported */
 const char_t *st_ready = "⌘ ready";         /* U+2318*/

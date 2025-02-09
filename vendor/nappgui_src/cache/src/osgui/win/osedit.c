@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,14 +10,14 @@
 
 /* Operating System edit box */
 
-#include "osedit.h"
-#include "osedit.inl"
 #include "osedit_win.inl"
-#include "osgui.inl"
 #include "osgui_win.inl"
 #include "oscontrol_win.inl"
 #include "ospanel_win.inl"
 #include "oswindow_win.inl"
+#include "../osedit.h"
+#include "../osedit.inl"
+#include "../osgui.inl"
 #include <draw2d/font.h>
 #include <core/event.h>
 #include <core/heap.h>

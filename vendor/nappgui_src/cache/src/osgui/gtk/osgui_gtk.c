@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,13 +10,13 @@
 
 /* Operating system native gui */
 
-#include "osgui.inl"
 #include "osgui_gtk.inl"
 #include "oscontrol_gtk.inl"
 #include "osglobals_gtk.inl"
 #include "ospanel_gtk.inl"
 #include "osmenu_gtk.inl"
 #include "oswindow_gtk.inl"
+#include "../osgui.inl"
 #include <draw2d/dctxh.h>
 #include <draw2d/image.h>
 #include <core/arrpt.h>
@@ -250,7 +250,7 @@ const char_t *_osgui_register_icon(const Image *image)
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         gtk_icon_theme_add_builtin_icon(ICON_NAME, (gint)width, cast(image_native(image), GdkPixbuf));
 #pragma GCC diagnostic pop
-        arrpt_append(kREGISTER_ICONS, image, Image);
+        arrpt_append(kREGISTER_ICONS, cast(image, Image), Image);
     }
 
     return ICON_NAME;

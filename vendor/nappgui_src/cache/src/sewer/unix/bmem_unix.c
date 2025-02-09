@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,14 +10,14 @@
 
 /* Operating System memory support */
 
-#include "bmem.h"
-#include "bmem.inl"
+#include "../bmem.h"
+#include "../bmem.inl"
 
 #if !defined(__UNIX__)
 #error This file is for Unix/Unix-like system
 #endif
 
-#include "cassert.h"
+#include "../cassert.h"
 #include <stdlib.h>
 #include <string.h>
 

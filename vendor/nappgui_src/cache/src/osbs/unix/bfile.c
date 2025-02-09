@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,9 +10,10 @@
 
 /* Basic file system services */
 
-#include "bfile.h"
-#include "osbs.inl"
+#include "../bfile.h"
+#include "../osbs.inl"
 #include <sewer/bmem.h>
+#include <sewer/blib.h>
 #include <sewer/cassert.h>
 #include <sewer/ptr.h>
 #include <sewer/unicode.h>
@@ -63,6 +64,57 @@ uint32_t bfile_dir_work(char_t *pathname, const uint32_t size)
     if (buff != NULL)
         return (uint32_t)(strlen(pathname) + 1);
     return 0;
+}
+
+/*---------------------------------------------------------------------------*/
+
+bool_t bfile_dir_set_work(const char_t *pathname, ferror_t *error)
+{
+    cassert_no_null(pathname);
+    if (chdir(cast_const(pathname, char)) == 0)
+    {
+        ptr_assign(error, ekFOK);
+        return TRUE;
+    }
+    else
+    {
+        if (error != NULL)
+        {
+            switch (errno)
+            {
+            case EACCES:
+                *error = ekFNOACCESS;
+                break;
+            case EEXIST:
+                *error = ekFEXISTS;
+                break;
+            case ENAMETOOLONG:
+                *error = ekFBIGNAME;
+                break;
+            case ENOENT:
+                *error = ekFNOPATH;
+                break;
+            default:
+                cassert_msg(FALSE, "dir_set_work: undefined");
+                *error = ekFUNDEF;
+            }
+        }
+
+        return FALSE;
+    }
+}
+
+/*---------------------------------------------------------------------------*/
+
+uint32_t bfile_dir_tmp(char_t *pathname, const uint32_t size)
+{
+    const char_t *temp = "/tmp";
+    uint32_t s = (uint32_t)strlen(temp);
+    if (s > size - 1)
+        s = size - 1;
+    blib_strncpy(pathname, size, temp, s);
+    pathname[s] = '\0';
+    return s;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -711,5 +763,7 @@ bool_t bfile_rename(const char_t *current_pathname, const char_t *new_pathname, 
                 *error = ekFUNDEF;
             }
         }
+
+        return FALSE;
     }
 }

@@ -5,17 +5,15 @@ for both wayland and x11 but resize doesn't work properly with that.
 
 Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
 
-diff --git a/vendor/nappgui_src/cache/src/osgui/gtk/oswindow.c b/vendor/nappgui_src/cache/src/osgui/gtk/oswindow.c
+diff --git a/src/osgui/gtk/oswindow.c b/src/osgui/gtk/oswindow.c
 index 09b6b01..2ba06e4 100644
---- a/vendor/nappgui_src/cache/src/osgui/gtk/oswindow.c
-+++ b/vendor/nappgui_src/cache/src/osgui/gtk/oswindow.c
 @@ -27,6 +27,7 @@
  #include <core/arrst.h>
  #include <core/event.h>
  #include <core/heap.h>
 +#include <core/strings.h>
  #include <sewer/cassert.h>
- 
+
  #if !defined(__GTK3__)
 @@ -36,6 +37,7 @@
  struct _oswindow_t

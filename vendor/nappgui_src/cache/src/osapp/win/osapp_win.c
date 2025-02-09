@@ -1,6 +1,6 @@
 /*
  * NAppGUI Cross-platform C SDK
- * 2015-2024 Francisco Garcia Collado
+ * 2015-2025 Francisco Garcia Collado
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
@@ -10,9 +10,9 @@
 
 /* Application runloop */
 
-#include "osapp.h"
-#include "osapp.inl"
 #include "osapp_win.inl"
+#include "../osapp.h"
+#include "../osapp.inl"
 #include <osgui/osgui.h>
 #include <core/event.h>
 #include <sewer/cassert.h>
