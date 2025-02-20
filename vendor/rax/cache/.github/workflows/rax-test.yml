@@ -1,0 +1,30 @@
+name: test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: make
+      run: make
+
+    - name: rax-test
+      run: |
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:./"
+        make rax-test
+        ./rax-test
+
+    - name: rax-oom-test
+      run: |
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:./"
+        make rax-oom-test
+        ./rax-oom-test

@@ -4,16 +4,18 @@
  * MIT Licence
  * https://nappgui.com/en/legal/license.html
  *
- * File: labelh.h
+ * File: osmenu_osx.inl
  *
  */
 
-/* Label (Hidden API) */
+/* Operating system native menu */
 
-#include "gui.hxx"
+#include "osgui_osx.ixx"
 
 __EXTERN_C
 
-const Font *label_get_font(const Label *label);
+void _osmenu_set_menubar(OSMenu *menu);
+
+void _osmenu_unset_menubar(OSMenu *menu);
 
 __END_C

@@ -35,6 +35,7 @@ _draw2d_api void guictx_append_label_manager_imp(
     FPtr_gctx_set_listener func_label_OnMouseExit,
     FPtr_gctx_set_text func_label_set_text,
     FPtr_gctx_set_cptr func_label_set_font,
+    FPtr_gctx_set_uint32 func_label_set_flags,
     FPtr_gctx_set_enum func_label_set_align,
     FPtr_gctx_set_enum func_label_set_ellipsis,
     FPtr_gctx_set_uint32 func_label_set_text_color,
@@ -56,6 +57,7 @@ _draw2d_api void guictx_append_label_manager_imp(
     func_label_OnMouseExit, \
     func_label_set_text, \
     func_label_set_font, \
+    func_label_set_flags, \
     func_label_set_align, \
     func_label_set_ellipsis, \
     func_label_set_text_color, \
@@ -77,6 +79,7 @@ _draw2d_api void guictx_append_label_manager_imp(
         FUNC_CHECK_GCTX_SET_LISTENER(func_label_OnMouseExit, label_type), \
         FUNC_CHECK_GCTX_SET_TEXT(func_label_set_text, label_type), \
         FUNC_CHECK_GCTX_SET_CPTR(func_label_set_font, label_type, font_type), \
+        FUNC_CHECK_GCTX_SET_UINT32(func_label_set_flags, label_type), \
         FUNC_CHECK_GCTX_SET_ENUM(func_label_set_align, label_type, align_t), \
         FUNC_CHECK_GCTX_SET_ENUM(func_label_set_ellipsis, label_type, ellipsis_t), \
         FUNC_CHECK_GCTX_SET_UINT32(func_label_set_text_color, label_type), \
@@ -98,6 +101,7 @@ _draw2d_api void guictx_append_label_manager_imp(
             (FPtr_gctx_set_listener)func_label_OnMouseExit, \
             (FPtr_gctx_set_text)func_label_set_text, \
             (FPtr_gctx_set_cptr)func_label_set_font, \
+            (FPtr_gctx_set_uint32)func_label_set_flags, \
             (FPtr_gctx_set_enum)func_label_set_align, \
             (FPtr_gctx_set_enum)func_label_set_ellipsis, \
             (FPtr_gctx_set_uint32)func_label_set_text_color, \
@@ -1265,34 +1269,38 @@ _draw2d_api void guictx_append_menu_manager_imp(
     GuiCtx *context,
     FPtr_gctx_create func_menu_create,
     FPtr_gctx_destroy func_menu_destroy,
-    FPtr_gctx_set_ptr func_attach_menuitem_to_menu,
-    FPtr_gctx_set_ptr func_detach_menuitem_from_menu,
+    FPtr_gctx_insert func_menu_insert_item,
+    FPtr_gctx_set_ptr func_menu_delete_item,
     FPtr_gctx_menu func_menu_launch_popup,
-    FPtr_gctx_call func_menu_hide_popup);
+    FPtr_gctx_call func_menu_hide_popup,
+    FPtr_gctx_get_bool func_menu_is_menubar);
 #define guictx_append_menu_manager( \
     context, \
     func_menu_create, \
     func_menu_destroy, \
-    func_attach_menuitem_to_menu, \
-    func_detach_menuitem_from_menu, \
+    func_menu_insert_item, \
+    func_menu_delete_item, \
     func_menu_launch_popup, \
     func_menu_hide_popup, \
+    func_menu_is_menubar, \
     menu_type, menuitem_type, window_type) \
     ( \
         FUNC_CHECK_GCTX_CREATE(func_menu_create, menu_type), \
         FUNC_CHECK_GCTX_DESTROY(func_menu_destroy, menu_type), \
-        FUNC_CHECK_GCTX_SET_PTR(func_attach_menuitem_to_menu, menu_type, menuitem_type), \
-        FUNC_CHECK_GCTX_SET_PTR(func_detach_menuitem_from_menu, menu_type, menuitem_type), \
+        FUNC_CHECK_GCTX_INSERT(func_menu_insert_item, menu_type, menuitem_type), \
+        FUNC_CHECK_GCTX_SET_PTR(func_menu_delete_item, menu_type, menuitem_type), \
         FUNC_CHECK_GCTX_MENU(func_menu_launch_popup, menu_type, window_type), \
         FUNC_CHECK_GCTX_CALL(func_menu_hide_popup, menu_type), \
+        FUNC_CHECK_GCTX_GET_BOOL(func_menu_is_menubar, menu_type), \
         guictx_append_menu_manager_imp( \
             context, \
             (FPtr_gctx_create)func_menu_create, \
             (FPtr_gctx_destroy)func_menu_destroy, \
-            (FPtr_gctx_set_ptr)func_attach_menuitem_to_menu, \
-            (FPtr_gctx_set_ptr)func_detach_menuitem_from_menu, \
+            (FPtr_gctx_insert)func_menu_insert_item, \
+            (FPtr_gctx_set_ptr)func_menu_delete_item, \
             (FPtr_gctx_menu)func_menu_launch_popup, \
-            (FPtr_gctx_call)func_menu_hide_popup))
+            (FPtr_gctx_call)func_menu_hide_popup, \
+            (FPtr_gctx_get_bool)func_menu_is_menubar))
 
 _draw2d_api void guictx_append_menuitem_manager_imp(
     GuiCtx *context,

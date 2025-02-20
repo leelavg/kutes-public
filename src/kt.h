@@ -41,6 +41,8 @@ struct _destroyer_t
 DeclPt(Destroyer);
 
 typedef struct _inops_t opsv;
+typedef struct _history_t History;
+
 typedef struct _app_t App;
 struct _app_t
 {
@@ -72,15 +74,18 @@ struct _app_t
     const char_t *start_ptr;
     ArrSt(uint32_t) *pos_cache;
     Proc *proc;
+    History *hist;
     uint32_t rsize;
     uint32_t cur_idx;
     uint32_t end_len;
     uint32_t pat_len;
     uint32_t out_len;
     uint32_t err_len;
+    uint32_t cpos;
     run_t run_state;
     bool_t stop;
     bool_t nolimit;
+    bool_t complete;
 
     /* child data */
     yyjson_mut_doc *doc;
@@ -116,25 +121,30 @@ extern char_t const *bt_run;
 extern char_t const *bt_stop;
 
 /*---------------------------------------------------------------------------*/
+
 /* TODO: probably the worst api, relook */
-void lock_view(opsv *, bool_t);
+void lock_view(opsv *locker, bool_t lock);
 /* TODO: end */
 
 /* TODO: populate_views should eventually accept a shared struct for all the views */
-void populate_views(App *);
-void adjust_vscroll(Layout *, const uint32_t selected, const uint32_t total);
+void populate_views(App *app);
+void adjust_vscroll(Layout *vscroll, const uint32_t selected, const uint32_t total);
 void cols_bind(void);
 
 yyjson_alc *alc_init(const char_t *name);
 void alc_dest(yyjson_alc **alc);
 
-/* related to boron evaluator */
 UThread *uthread_create(void);
-void uthread_destroy(UThread **);
-void update_jroot(UThread *, yyjson_mut_val *);
-KDataType boron_eval(UThread *, const char *, UCell **);
-const char *bn_str(UThread *, UCell *);
-int64_t bn_int(UCell *);
-bool_t bn_bool(UCell *);
-double bn_num(UCell *);
-yyjson_mut_val *bn_jval(UThread *, UCell *);
+void uthread_destroy(UThread **ut);
+void update_jroot(UThread *ut, yyjson_mut_val *jroot);
+KDataType boron_eval(UThread *ut, const char *script, UCell **val);
+const char *bn_str(UThread *ut, UCell *val);
+int64_t bn_int(UCell *val);
+bool_t bn_bool(UCell *val);
+double bn_num(UCell *val);
+yyjson_mut_val *bn_jval(UThread *ut, UCell *val);
+
+History *history_load(void);
+bool_t history_append(History *hist, byte_t *data, uint32_t len);
+uint32_t history_search(History *hist, byte_t *prefix, uint32_t prefix_len, byte_t *match, uint32_t max_len);
+void history_flush(History **hist);

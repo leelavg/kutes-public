@@ -1,0 +1,1546 @@
+diff --git a/prj/NAppCompilers.cmake b/prj/NAppCompilers.cmake
+index b01a91c..5c93159 100644
+--- a/prj/NAppCompilers.cmake
++++ b/prj/NAppCompilers.cmake
+@@ -32,6 +32,9 @@ macro(nap_config_compiler)
+ include(${NAPPGUI_ROOT_PATH}/prj/NAppUtils.cmake)
+ 
+ if (WIN32)
++    if(${CMAKE_CROSSCOMPILING})
++        set(CMAKE_SIZEOF_VOID_P 8)
++    endif()
+ 
+     if (${CMAKE_SIZEOF_VOID_P} STREQUAL 4)
+         set(CMAKE_HOST_ARCHITECTURE "x86")
+@@ -182,7 +185,9 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+     endif()
+     nap_osx_build_arch(${CMAKE_ARCHITECTURE} CMAKE_OSX_ARCHITECTURES)
+ 
+-    if (${CMAKE_CXX_COMPILER_ID} STREQUAL "AppleClang")
++    if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "AppleClang") OR
++        ((${CMAKE_CROSSCOMPILING} AND
++         ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")))
+         include(${NAPPGUI_ROOT_PATH}/prj/NAppAppleClang.cmake)
+         nap_apple_clang_flags()
+ 
+diff --git a/prj/NAppGenerateTools.cmake b/prj/NAppGenerateTools.cmake
+index 40ad1c2..2624b2b 100644
+--- a/prj/NAppGenerateTools.cmake
++++ b/prj/NAppGenerateTools.cmake
+@@ -22,15 +22,16 @@ function(nap_generate_tools)
+ 
+         include(${NAPPGUI_ROOT_PATH}/prj/NAppGenerators.cmake)
+         nap_generator_multiconfig(isMultiConfig)
+-        if (isMultiConfig)
+-            set(CMAKE_BUILD_OPTS "--config Debug")
++        if(${CMAKE_CROSSCOMPILING})
++            set(CMAKE_BUILD_OPTS "--toolchain ${CMAKE_TOOLCHAIN_FILE}")
+         endif()
+ 
+         # CMake configure
+         execute_process(
+                     COMMAND ${CMAKE_COMMAND}
+                     "-E" chdir "${TOOLS_BUILD_DIR}"
+-                    ${CMAKE_COMMAND} "-G" "${CMAKE_GENERATOR}"
++                    ${CMAKE_COMMAND} ${CMAKE_BUILD_OPTS}
++                    "-G" "${CMAKE_GENERATOR}"
+                     "-DNAPPGUI_ROOT_PATH=${NAPPGUI_ROOT_PATH}"
+                     "-DNAPPGUI_MAJOR=${NAPPGUI_MAJOR}"
+                     "-DNAPPGUI_MINOR=${NAPPGUI_MINOR}"
+diff --git a/prj/NAppTarget.cmake b/prj/NAppTarget.cmake
+index 1b372b6..053819d 100644
+--- a/prj/NAppTarget.cmake
++++ b/prj/NAppTarget.cmake
+@@ -341,9 +341,12 @@ function(nap_source_files targetName dir group publicHeaders)
+                     endif()
+                 endif()
+ 
+-                nap_add_source_subdir(${targetName} ${dir})
+-                nap_add_source_file(${targetName} ${dir}/${child})
+-                nap_add_public_header(${targetName} ${dir}/${child} ${extLower} ${publicHeaders})
++                # we only require json but not http which requires curl on linux
++                if (NOT ${child} STREQUAL "oshttpreq.c")
++                    nap_add_source_subdir(${targetName} ${dir})
++                    nap_add_source_file(${targetName} ${dir}/${child})
++                    nap_add_public_header(${targetName} ${dir}/${child} ${extLower} ${publicHeaders})
++                endif()
+ 
+             endif()
+ 
+@@ -453,6 +456,14 @@ function(nap_resource_packs targetName targetType nrcMode dir _resFiles _resIncl
+ 
+             file(TO_NATIVE_PATH ${resPackPath} RESPACK_NATIVE)
+             file(TO_NATIVE_PATH ${DEST_RESDIR}/${resPack}.c RESDEST_NATIVE)
++
++            if(${CMAKE_CROSSCOMPILING})
++                if (NOT EXISTS "${NATIVE_NRC_PATH}")
++                    message (FATAL_ERROR "Expected 'NATIVE_NRC_PATH' to be provided")
++                endif()
++                set(NAPPGUI_NRC "${NATIVE_NRC_PATH}")
++            endif()
++
+             execute_process(COMMAND "${NAPPGUI_NRC}" "${NRC_OPTION}" "${RESPACK_NATIVE}" "${RESDEST_NATIVE}" RESULT_VARIABLE nrcRes OUTPUT_VARIABLE nrcOut ERROR_VARIABLE nrcErr)
+             file(WRITE ${CMAKE_OUTPUT} ${nrcOut})
+             file(APPEND ${CMAKE_OUTPUT} ${nrcErr})
+@@ -669,12 +680,12 @@ function(nap_link_inet targetName)
+         target_link_libraries(${targetName} wininet)
+ 
+     elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+-        find_package(CURL)
+-        if (${CURL_FOUND})
+-            target_link_libraries(${targetName} ${CURL_LIBRARY})
+-        else()
+-            message(ERROR "- libCURL is required. Try 'sudo apt-get install libcurl4-openssl-dev'")
+-        endif()
++        # find_package(CURL)
++        # if (${CURL_FOUND})
++        #     target_link_libraries(${targetName} ${CURL_LIBRARY})
++        # else()
++        #     message(ERROR "- libCURL is required. Try 'sudo apt-get install libcurl4-openssl-dev'")
++        # endif()
+ 
+     endif()
+ 
+diff --git a/src/draw2d/draw2d.c b/src/draw2d/draw2d.c
+index 78f3fb5..c9c1f8f 100644
+--- a/src/draw2d/draw2d.c
++++ b/src/draw2d/draw2d.c
+@@ -168,7 +168,8 @@ color_t color_indexed(const uint16_t index, const color_t color)
+     if (index == 0)
+         return kCOLOR_DEFAULT;
+ 
+-    cassert((uint8_t)(color >> 24) != 0);
++    /* TODO: should be scheme aware */
++    /* cassert((uint8_t)(color >> 24) != 0); */
+ 
+     arrst_foreach(ic, i_INDEXED_COLORS, IColor)
+         if (index == ic->index)
+@@ -453,4 +454,4 @@ const char_t *_draw2d_str_avg_char_width(uint32_t *len)
+     cassert_no_null(len);
+     *len = i_AVG_CHAR_WIDTH_LEN;
+     return i_AVG_CHAR_WIDTH;
+-}
+\ No newline at end of file
++}
+diff --git a/src/draw2d/guictx.hxx b/src/draw2d/guictx.hxx
+index 8f6db6b..9031203 100644
+--- a/src/draw2d/guictx.hxx
++++ b/src/draw2d/guictx.hxx
+@@ -253,7 +253,8 @@ typedef enum _gui_text_t
+     ekGUI_TEXT_SCROLL,
+     ekGUI_TEXT_WRAP_MODE,
+     ekGUI_TEXT_APPLY_ALL,
+-    ekGUI_TEXT_APPLY_SEL
++    ekGUI_TEXT_APPLY_SEL,
++    ekGUI_TEXT_DELETE
+ } gui_text_t;
+ 
+ typedef enum _gui_web_t
+diff --git a/src/draw2d/win/draw2d_gdi.ixx b/src/draw2d/win/draw2d_gdi.ixx
+index a345162..2b1abeb 100644
+--- a/src/draw2d/win/draw2d_gdi.ixx
++++ b/src/draw2d/win/draw2d_gdi.ixx
+@@ -15,7 +15,7 @@
+ 
+ #include "../draw2d.hxx"
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
++#include <windows.h>
+ #include <sewer/warn.hxx>
+ 
+ struct _measurestr_t
+diff --git a/src/gui/popup.c b/src/gui/popup.c
+index ef7a456..f777165 100644
+--- a/src/gui/popup.c
++++ b/src/gui/popup.c
+@@ -161,6 +161,19 @@ void popup_set_elem(PopUp *popup, const uint32_t index, const char_t *text, cons
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void popup_del_elem(PopUp *popup, const uint32_t index)
++{
++    cassert_no_null(popup);
++    cassert_no_null(popup->component.context);
++    cassert_no_nullf(popup->component.context->func_popup_set_elem);
++    cassert(index < arrst_size(popup->elems, PElem));
++    arrst_delete(popup->elems, index, i_remove_elem, PElem);
++    popup->component.context->func_popup_set_elem(popup->component.ositem, ekCTRL_OP_DEL, index, NULL, NULL);
++    popup->component.context->func_popup_list_height(popup->component.ositem, arrst_size(popup->elems, PElem));
++}
++
++/*---------------------------------------------------------------------------*/
++
+ void popup_clear(PopUp *popup)
+ {
+     uint32_t i, n;
+diff --git a/src/gui/popup.h b/src/gui/popup.h
+index a393411..3fccdb2 100644
+--- a/src/gui/popup.h
++++ b/src/gui/popup.h
+@@ -25,6 +25,8 @@ _gui_api void popup_add_elem(PopUp *popup, const char_t *text, const Image *imag
+ 
+ _gui_api void popup_set_elem(PopUp *popup, const uint32_t index, const char_t *text, const Image *image);
+ 
++_gui_api void popup_del_elem(PopUp *popup, const uint32_t index);
++
+ _gui_api void popup_clear(PopUp *popup);
+ 
+ _gui_api uint32_t popup_count(const PopUp *popup);
+diff --git a/src/gui/tableview.c b/src/gui/tableview.c
+index 835197a..79c7312 100644
+--- a/src/gui/tableview.c
++++ b/src/gui/tableview.c
+@@ -26,6 +26,7 @@
+ #include <geom2d/s2d.h>
+ #include <core/arrst.h>
+ #include <core/arrpt.h>
++#include <core/clock.h>
+ #include <core/event.h>
+ #include <core/heap.h>
+ #include <core/strings.h>
+@@ -93,12 +94,15 @@ struct _tdata_t
+     bool_t vlines;
+     bool_t recompute_width;
+     bool_t recompute_height;
++    bool_t redraw_header;
++    bool_t draw_overlay;
+     uint32_t hkey_scroll;
+     Listener *OnData;
+     Listener *OnSelect;
+     Listener *OnRowClick;
+     Listener *OnHeaderClick;
+     Window *window;
++    Clock *clock;
+ };
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -137,6 +141,9 @@ static TData *i_create_data(View *view)
+     data->hkey_scroll = i_HORIZONTAL_KEY_SCROLL;
+     data->multisel_mode = ekCTRL_MSEL_NO;
+     data->cursor = ekGUI_CURSOR_ARROW;
++    /* .08 s == 80 ms ~= 12 fps */
++    /* data->clock = clock_create(.08);
++    clock_frame(data->clock, NULL, NULL); */
+     return data;
+ }
+ 
+@@ -163,6 +170,7 @@ static void i_destroy_data(TData **data)
+     listener_destroy(&(*data)->OnHeaderClick);
+     arrst_destroy(&(*data)->columns, i_remove_column, Column);
+     arrst_destroy(&(*data)->selected, NULL, uint32_t);
++    /* clock_destroy(&(*data)->clock); */
+     heap_delete(data, TData);
+ }
+ 
+@@ -323,6 +331,18 @@ static void i_OnDraw(TableView *view, Event *e)
+     uint32_t nc = 0, nr = 0;
+     cassert_no_null(data);
+ 
++    /*
++        TODO: even after a lengthy debugging not able to figure out why gtk
++        triggers redraw when the cursor is on scrollbars (h/v), so brigning down
++        the frame rate and also stopped redraw on various events by going over
++        each one of them.
++    */
++    /* if (!clock_frame(data->clock, NULL, NULL))
++    {
++        data->draw_overlay = FALSE;
++        return;
++    }
++    data->draw_overlay = TRUE; */
+     freeze_width = i_freezed_width(data->columns, data->freeze_col_id);
+     nc = arrst_size(data->columns, Column);
+     nr = data->num_rows;
+@@ -595,11 +615,15 @@ static void i_draw_header(DCtx *ctx, const TData *data, const Column *col, const
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++static void i_head_height(TData *data);
+ static void i_OnOverlay(TableView *view, Event *e)
+ {
+     TData *data = view_get_data(cast(view, View), TData);
+     cassert_no_null(data);
+ 
++    /* if (!data->draw_overlay)
++        return; */
++
+     if (data->head_visible == TRUE)
+     {
+         const EvDraw *p = event_params(e, EvDraw);
+@@ -613,6 +637,13 @@ static void i_OnOverlay(TableView *view, Event *e)
+         int32_t lx;
+         uint32_t i;
+ 
++        if (data->redraw_header)
++        {
++            drawctrl_clear(p->ctx, (int32_t)p->x, (int32_t)p->y, (uint32_t)p->width, data->head_height);
++            i_head_height(data);
++            data->redraw_header = FALSE;
++        }
++
+         {
+             V2Df pos;
+             view_viewport(cast(view, View), &pos, NULL);
+@@ -1011,7 +1042,10 @@ static void i_OnMove(TableView *view, Event *e)
+         }
+     }
+ 
+-    view_update(cast(view, View));
++    /*
++        TODO: changing cursor doesn't need view update
++        view_update(cast(view, View));
++    */
+ }
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -1036,6 +1070,7 @@ static void i_OnDrag(TableView *view, Event *e)
+             col->width = (uint32_t)col_width;
+ 
+         data->recompute_width = TRUE;
++        data->recompute_height = TRUE;
+         i_document_size(view, data);
+         view_update(cast(view, View));
+     }
+@@ -1052,7 +1087,10 @@ static void i_OnExit(TableView *view, Event *e)
+     data->mouse_sep = UINT32_MAX;
+     if (data->mouse_down == FALSE)
+         i_set_cursor(view, data, ekGUI_CURSOR_ARROW);
+-    view_update(cast(view, View));
++    /*
++        TODO: changing cursor doesn't need view update
++        view_update(cast(view, View));
++    */
+     unref(e);
+ }
+ 
+@@ -1237,7 +1275,10 @@ static void i_OnUp(TableView *view, Event *e)
+     data->resize_mouse_x = UINT32_MAX;
+     data->resize_col_width = UINT32_MAX;
+     i_set_cursor(view, data, ekGUI_CURSOR_ARROW);
+-    view_update(cast(view, View));
++    /*
++        TODO: changing cursor doesn't need view update
++        view_update(cast(view, View));
++    */
+     unref(e);
+ }
+ 
+@@ -1685,6 +1726,22 @@ uint32_t tableview_new_column_text(TableView *view)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void tableview_remove_column(TableView *view, uint32_t index)
++{
++
++    TData *data = view_get_data(cast(view, View), TData);
++    uint32_t ncols = arrst_size(data->columns, Column);
++    cassert_no_null(data);
++    if (ncols > index)
++    {
++        arrst_delete(data->columns, index, i_remove_column, Column);
++        data->redraw_header = TRUE;
++        view_update(cast(view, View));
++    }
++}
++
++/*---------------------------------------------------------------------------*/
++
+ void tableview_column_width(TableView *view, const uint32_t column_id, const real32_t width)
+ {
+     TData *data = view_get_data(cast(view, View), TData);
+@@ -2117,4 +2174,4 @@ uint32_t tableview_get_focus_row(const TableView *view)
+ void tableview_scroll_visible(TableView *view, const bool_t horizontal, const bool_t vertical)
+ {
+     view_scroll_visible(cast(view, View), horizontal, vertical);
+-}
+\ No newline at end of file
++}
+diff --git a/src/gui/tableview.h b/src/gui/tableview.h
+index 317ab49..0f89c0d 100644
+--- a/src/gui/tableview.h
++++ b/src/gui/tableview.h
+@@ -31,6 +31,8 @@ _gui_api void tableview_size(TableView *view, S2Df size);
+ 
+ _gui_api uint32_t tableview_new_column_text(TableView *view);
+ 
++_gui_api void tableview_remove_column(TableView *view, uint32_t index);
++
+ _gui_api void tableview_column_width(TableView *view, const uint32_t column_id, const real32_t width);
+ 
+ _gui_api void tableview_column_limits(TableView *view, const uint32_t column_id, const real32_t min, const real32_t max);
+diff --git a/src/gui/textview.c b/src/gui/textview.c
+index 1fbea64..bc48f73 100644
+--- a/src/gui/textview.c
++++ b/src/gui/textview.c
+@@ -378,6 +378,17 @@ void textview_select(TextView *view, const int32_t start, const int32_t end)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void textview_del_sel(TextView *view)
++{
++    uint32_t nonused = 0;
++    cassert_no_null(view);
++    cassert_no_null(view->component.context);
++    cassert_no_nullf(view->component.context->func_text_set_prop);
++    view->component.context->func_text_set_prop(view->component.ositem, (enum_t)ekGUI_TEXT_DELETE, cast(&nonused, void));
++}
++
++/*---------------------------------------------------------------------------*/
++
+ void textview_show_select(TextView *view, const bool_t show)
+ {
+     cassert_no_null(view);
+diff --git a/src/gui/textview.h b/src/gui/textview.h
+index 312afaf..d895717 100644
+--- a/src/gui/textview.h
++++ b/src/gui/textview.h
+@@ -63,6 +63,8 @@ _gui_api void textview_editable(TextView *view, const bool_t is_editable);
+ 
+ _gui_api void textview_select(TextView *view, const int32_t start, const int32_t end);
+ 
++_gui_api void textview_del_sel(TextView *view);
++
+ _gui_api void textview_show_select(TextView *view, const bool_t show);
+ 
+ _gui_api void textview_scroll_caret(TextView *view);
+diff --git a/src/inet/win/oshttpreq.c b/src/inet/win/oshttpreq.c
+index 232dc25..c1dc490 100644
+--- a/src/inet/win/oshttpreq.c
++++ b/src/inet/win/oshttpreq.c
+@@ -25,8 +25,8 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
+-#include <WinInet.h>
++#include <windows.h>
++#include <wininet.h>
+ #include <sewer/warn.hxx>
+ 
+ struct _oshttp_t
+diff --git a/src/osapp/gtk/osapp_gtk.c b/src/osapp/gtk/osapp_gtk.c
+index a71038d..1a9bf31 100644
+--- a/src/osapp/gtk/osapp_gtk.c
++++ b/src/osapp/gtk/osapp_gtk.c
+@@ -14,6 +14,7 @@
+ #include "../osapp.h"
+ #include "../osapp.inl"
+ #include <osgui/osgui.h>
++#include <osgui/osglobals.h>
+ #include <core/event.h>
+ #include <core/strings.h>
+ #include <osbs/bfile.h>
+@@ -30,6 +31,7 @@
+ struct _osapp_t
+ {
+     GtkApplication *gtk_app;
++    GSettings *g_settings;
+     uint32_t argc;
+     char_t **argv;
+     gchar *resources_dir;
+@@ -42,6 +44,8 @@ struct _osapp_t
+     bool_t terminate;
+     bool_t abnormal_termination;
+     bool_t with_run_loop;
++    bool_t theme_changed;
++    bool_t theme_invert;
+     Listener *OnTheme;
+     FPtr_app_call func_OnFinishLaunching;
+     FPtr_app_call func_OnTimerSignal;
+@@ -64,7 +68,6 @@ OSApp *_osapp_init_imp(
+     FPtr_app_call func_OnFinishLaunching,
+     FPtr_app_call func_OnTimerSignal)
+ {
+-    static char GDK_BACKEND[64];
+     bmem_zero(&i_APP, OSApp);
+     cassert_unref(instance == NULL, instance);
+     cassert_no_null(listener);
+@@ -72,8 +75,6 @@ OSApp *_osapp_init_imp(
+     cassert(i_APP.listener == NULL);
+     cassert(i_APP.func_OnFinishLaunching == NULL);
+     cassert(i_APP.func_OnTimerSignal == NULL);
+-    str_copy_c(GDK_BACKEND, sizeof(GDK_BACKEND), "GDK_BACKEND=x11");
+-    putenv(GDK_BACKEND);
+     cassert(g_application_id_is_valid("com.nappgui.app") == TRUE);
+     i_APP.gtk_app = gtk_application_new("com.nappgui.app", G_APPLICATION_NON_UNIQUE);
+     cassert_no_null(i_APP.gtk_app);
+@@ -88,9 +89,20 @@ OSApp *_osapp_init_imp(
+     i_APP.terminate = FALSE;
+     i_APP.abnormal_termination = FALSE;
+     i_APP.with_run_loop = with_run_loop;
++    i_APP.theme_changed = FALSE;
++    i_APP.theme_invert = FALSE;
+     i_APP.OnTheme = NULL;
+     i_APP.func_OnFinishLaunching = func_OnFinishLaunching;
+     i_APP.func_OnTimerSignal = func_OnTimerSignal;
++    i_APP.g_settings = NULL;
++    {
++        /* TODO: should be replaced with other desktop interfaces?, kde, mate etc */
++        const gchar *schema_id = "org.gnome.desktop.interface";
++        GSettingsSchemaSource *source = g_settings_schema_source_get_default();
++        GSettingsSchema *schema = g_settings_schema_source_lookup(source, schema_id, FALSE);
++        if (schema)
++            i_APP.g_settings = g_settings_new(schema_id);
++    }
+     return &i_APP;
+ }
+ 
+@@ -132,6 +144,9 @@ static void i_terminate(OSApp *app)
+         app->func_destroy(&app->listener);
+     }
+ 
++    if (app->g_settings)
++        g_object_unref(app->g_settings);
++
+     if (app->icon != NULL)
+         g_object_unref(app->icon);
+ 
+@@ -179,6 +194,36 @@ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const u
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++static void update_theme(OSApp *app)
++{
++    gchar *color_scheme = NULL;
++    bool_t dark_theme = FALSE;
++    g_settings_get(app->g_settings, "color-scheme", "s", &color_scheme);
++
++    if (str_equ_c(color_scheme, "prefer-dark"))
++        dark_theme = TRUE;
++    if (app->theme_invert)
++        dark_theme = !dark_theme;
++
++    g_object_set(gtk_settings_get_default(),
++                 "gtk-application-prefer-dark-theme",
++                 dark_theme,
++                 NULL);
++    osglobals_theme_changed();
++}
++
++/*---------------------------------------------------------------------------*/
++
++void _osapp_theme_invert_imp(OSApp *app, bool_t invert)
++{
++    cassert_no_null(app);
++    cassert(app == &i_APP);
++    app->theme_invert = invert;
++    app->theme_changed = TRUE;
++}
++
++/*---------------------------------------------------------------------------*/
++
+ /* This function will be called repeatedly during the life-cycle of the app
+    until it returns FALSE, at which point the timeout is automatically destroyed
+    and the function will not be called again. */
+@@ -193,6 +238,14 @@ static gboolean i_OnTimerLoop(gpointer data)
+         return FALSE;
+     }
+ 
++    if (app->theme_changed == TRUE)
++    {
++        update_theme(app);
++        if (app->OnTheme != NULL)
++            listener_event(app->OnTheme, 0, (OSApp *)app->listener, NULL, NULL, OSApp, void, void);
++        app->theme_changed = FALSE;
++    }
++
+     if (app->func_OnTimerSignal != NULL)
+         app->func_OnTimerSignal(app->listener);
+ 
+@@ -201,6 +254,15 @@ static gboolean i_OnTimerLoop(gpointer data)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++static void i_OnColorScheme(GSettings *settings, gchar *key, OSApp *osapp)
++{
++    cassert(str_equ_c(key, "color-scheme"));
++    osapp->theme_changed = TRUE;
++    unref(settings);
++}
++
++/*---------------------------------------------------------------------------*/
++
+ /* This function will be called repeatedly until the application is created,
+    at which point the timeout is automatically destroyed and the function will
+    not be called again. */
+@@ -215,6 +277,11 @@ static gboolean i_OnTimerInit(gpointer data)
+         if (app->is_init == FALSE)
+         {
+             app->is_init = TRUE;
++            if (app->g_settings)
++            {
++                update_theme(app);
++                g_signal_connect(i_APP.g_settings, "changed::color-scheme", G_CALLBACK(i_OnColorScheme), (gpointer)&i_APP);
++            }
+             app->func_OnFinishLaunching(app->listener);
+             return FALSE;
+         }
+diff --git a/src/osapp/osapp.c b/src/osapp/osapp.c
+index f5e56e3..c30f41d 100644
+--- a/src/osapp/osapp.c
++++ b/src/osapp/osapp.c
+@@ -392,6 +392,14 @@ uint32_t osapp_argv(const uint32_t index, char_t *argv, const uint32_t size)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void osapp_theme_invert(bool_t invert)
++{
++    i_App *app = _osapp_listener(i_App);
++    _osapp_theme_invert_imp(app->osapp, invert);
++}
++
++/*---------------------------------------------------------------------------*/
++
+ void osapp_task_imp(void *data, const real32_t updtime, FPtr_task_main func_task_main, FPtr_task_update func_task_update, FPtr_task_end func_task_end)
+ {
+     i_App *app = _osapp_listener(i_App);
+diff --git a/src/osapp/osapp.h b/src/osapp/osapp.h
+index de58674..c717818 100644
+--- a/src/osapp/osapp.h
++++ b/src/osapp/osapp.h
+@@ -27,6 +27,8 @@ _osapp_api void osapp_menubar(Menu *menu, Window *window);
+ 
+ _osapp_api void osapp_open_url(const char_t *url);
+ 
++_osapp_api void osapp_theme_invert(bool_t invert);
++
+ __END_C
+ 
+ #define osapp_task(data, updtime, func_main, func_update, func_end, type) \
+diff --git a/src/osapp/osapp.inl b/src/osapp/osapp.inl
+index 73a5827..d414fbd 100644
+--- a/src/osapp/osapp.inl
++++ b/src/osapp/osapp.inl
+@@ -37,6 +37,8 @@ void _osapp_terminate_imp(
+ 
+ uint32_t _osapp_argc_imp(OSApp *app);
+ 
++void _osapp_theme_invert_imp(OSApp *app, bool_t invert);
++
+ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const uint32_t max_size);
+ 
+ void _osapp_run(OSApp *app);
+diff --git a/src/osapp/osmain_win.h b/src/osapp/osmain_win.h
+index 6db7a20..a5978a7 100644
+--- a/src/osapp/osmain_win.h
++++ b/src/osapp/osmain_win.h
+@@ -11,7 +11,7 @@
+ /* Cross-platform main */
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
++#include <windows.h>
+ #include <sewer/warn.hxx>
+ 
+ #if (_MSC_VER)
+diff --git a/src/osapp/osx/osapp_osx.m b/src/osapp/osx/osapp_osx.m
+index 9911337..a518826 100644
+--- a/src/osapp/osx/osapp_osx.m
++++ b/src/osapp/osx/osapp_osx.m
+@@ -339,6 +339,15 @@ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const u
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void _osapp_theme_invert_imp(OSApp *app, bool_t invert)
++{
++    cassert_no_null(app);
++    cassert(cast(app, NSApplication) == NSApp);
++    unref(invert);
++}
++
++/*---------------------------------------------------------------------------*/
++
+ void _osapp_run(OSApp *app)
+ {
+     cassert_no_null(app);
+diff --git a/src/osapp/win/osapp_win.c b/src/osapp/win/osapp_win.c
+index 11f3051..3723abe 100644
+--- a/src/osapp/win/osapp_win.c
++++ b/src/osapp/win/osapp_win.c
+@@ -23,8 +23,8 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
+-#include <ShlObj.h>
++#include <windows.h>
++#include <shlobj.h>
+ #include <sewer/warn.hxx>
+ 
+ struct _osapp_t
+@@ -170,6 +170,15 @@ uint32_t _osapp_argv_imp(OSApp *app, const uint32_t index, char_t *argv, const u
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void _osapp_theme_invert_imp(OSApp *app, bool_t invert)
++{
++    cassert_no_null(app);
++    cassert(app == &i_APP);
++    unref(invert);
++}
++
++/*---------------------------------------------------------------------------*/
++
+ static VOID CALLBACK i_OnTimer(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
+ {
+     cassert(hwnd == NULL);
+diff --git a/src/osbs/bproc.h b/src/osbs/bproc.h
+index 69a71ca..fbe6eb3 100644
+--- a/src/osbs/bproc.h
++++ b/src/osbs/bproc.h
+@@ -25,6 +25,8 @@ _osbs_api uint32_t bproc_wait(Proc *proc);
+ 
+ _osbs_api bool_t bproc_finish(Proc *proc, uint32_t *code);
+ 
++_osbs_api void bproc_wait_exit(Proc **proc);
++
+ _osbs_api bool_t bproc_read(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsize, perror_t *error);
+ 
+ _osbs_api bool_t bproc_eread(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsize, perror_t *error);
+diff --git a/src/osbs/osbs.hxx b/src/osbs/osbs.hxx
+index afadc7c..2e56054 100644
+--- a/src/osbs/osbs.hxx
++++ b/src/osbs/osbs.hxx
+@@ -126,7 +126,8 @@ typedef enum _perror_t
+ {
+     ekPPIPE = 1,
+     ekPEXEC,
+-    ekPOK
++    ekPOK,
++    ekPAGAIN
+ } perror_t;
+ 
+ typedef enum _serror_t
+diff --git a/src/osbs/unix/bproc.c b/src/osbs/unix/bproc.c
+index 514aaf3..7c1f166 100644
+--- a/src/osbs/unix/bproc.c
++++ b/src/osbs/unix/bproc.c
+@@ -11,6 +11,7 @@
+ /* Processes */
+ 
+ #include "../bproc.h"
++#include "../bthread.h"
+ #include "../osbs.inl"
+ #include <sewer/bmem.h>
+ #include <sewer/cassert.h>
+@@ -23,9 +24,11 @@
+ #include <unistd.h>
+ #include <sys/types.h>
+ #include <sys/wait.h>
++#include <sys/poll.h>
+ #include <signal.h>
+ #include <stdlib.h>
+ #include <errno.h>
++#include <fcntl.h>
+ 
+ #define STDIN_READ_CHILD 0
+ #define STDIN_WRITE_PARENT 1
+@@ -33,6 +36,8 @@
+ #define STDOUT_WRITE_CHILD 3
+ #define STDERR_READ_PARENT 4
+ #define STDERR_WRITE_CHILD 5
++#define CLOSE_WRITE 6
++#define CLOSE_READ 7
+ 
+ #if defined __LINUX__
+ int kill(pid_t pid, int sig);
+@@ -40,7 +45,7 @@ int kill(pid_t pid, int sig);
+ 
+ struct _process_t
+ {
+-    int pipes[6];
++    int pipes[8];
+     pid_t pid;
+ };
+ 
+@@ -50,7 +55,7 @@ static Proc *i_create(int *pipes, pid_t pid)
+ {
+     Proc *proc = cast(bmem_malloc(sizeof(Proc)), Proc);
+     _osbs_proc_alloc();
+-    bmem_copy_n(proc->pipes, pipes, 6, int);
++    bmem_copy_n(proc->pipes, pipes, 8, int);
+     proc->pid = pid;
+     return proc;
+ }
+@@ -61,7 +66,7 @@ static void i_close_pipes(int *pipes)
+ {
+     uint32_t i;
+     cassert_no_null(pipes);
+-    for (i = 0; i < 6; ++i)
++    for (i = 0; i < 8; ++i)
+     {
+         if (pipes[i] >= 0)
+             close(pipes[i]);
+@@ -70,7 +75,7 @@ static void i_close_pipes(int *pipes)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
+-static bool_t i_pipes(int pipes[6])
++static bool_t i_pipes(int pipes[8])
+ {
+     pipes[0] = -1;
+     pipes[1] = -1;
+@@ -78,6 +83,8 @@ static bool_t i_pipes(int pipes[6])
+     pipes[3] = -1;
+     pipes[4] = -1;
+     pipes[5] = -1;
++    pipes[6] = -1;
++    pipes[7] = -1;
+ 
+     if (pipe(pipes) == -1)
+     {
+@@ -91,12 +98,30 @@ static bool_t i_pipes(int pipes[6])
+         return FALSE;
+     }
+ 
++    if (fcntl(pipes[2], F_SETFL, fcntl(pipes[2], F_GETFL) | O_NONBLOCK) < 0)
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     if (pipe(pipes + 4) == -1)
+     {
+         i_close_pipes(pipes);
+         return FALSE;
+     }
+ 
++    if (fcntl(pipes[4], F_SETFL, fcntl(pipes[4], F_GETFL) | O_NONBLOCK) < 0)
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
++    if (pipe(pipes + 6) == -1)
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     return TRUE;
+ }
+ 
+@@ -126,6 +151,10 @@ static bool_t i_exec(const char_t *command, int *pipes, pid_t *pid)
+         close(pipes[STDERR_WRITE_CHILD]);
+         close(pipes[STDERR_READ_PARENT]);
+ 
++        close(pipes[CLOSE_WRITE]);
++        close(pipes[CLOSE_READ]);
++
++        setsid();
+         execlp("bash", "bash", "-c", command, NULL);
+         cassert_msg(FALSE, "It's a zombie!");
+         return FALSE;
+@@ -155,7 +184,7 @@ static bool_t i_exec(const char_t *command, int *pipes, pid_t *pid)
+ 
+ Proc *bproc_exec(const char_t *command, perror_t *error)
+ {
+-    int pipes[6];
++    int pipes[8];
+     pid_t pid;
+ 
+     if (i_pipes(pipes) == FALSE)
+@@ -202,11 +231,45 @@ void bproc_close(Proc **proc)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++/*
++    Child exits after performing IO against pipes which are buffered and there
++    will be latency of parent doing a read and we wait for the last pipe to be
++    closed indirectly inferring IO completion.
++
++    TODO: there could be a race condition here as the function is designed to
++    be called from different thread where proc could change the value (to NULL).
++*/
++
++void bproc_wait_exit(Proc **proc)
++{
++    /* eventfd is only available on linux and carrying out the signaling with pipes only */
++    struct pollfd fds[1];
++    int ret;
++    cassert_no_null(proc);
++    cassert_no_null(*proc);
++    fds[0].fd = (*proc)->pipes[CLOSE_READ];
++    while (*proc)
++    {
++        ret = poll(fds, 1, -1);
++        if (ret == 1 && (fds[0].revents & POLLHUP || fds[0].revents & POLLNVAL))
++        {
++            fds[0].fd = -1;
++            break;
++        }
++        bthread_sleep(100);
++    }
++}
++
++/*---------------------------------------------------------------------------*/
++
+ bool_t bproc_cancel(Proc *proc)
+ {
+     cassert_no_null(proc);
+-    if (kill(proc->pid, SIGKILL) == 0)
++    if (kill(-proc->pid, SIGHUP) == 0)
++    {
++        waitpid(proc->pid, NULL, 0);
+         return TRUE;
++    }
+     else
+         return FALSE;
+ }
+@@ -294,6 +357,12 @@ bool_t bproc_read(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsize
+         ptr_assign(error, ekPOK);
+         return FALSE;
+     }
++    else if (errno == EAGAIN)
++    {
++        ptr_assign(rsize, 0);
++        ptr_assign(error, ekPAGAIN);
++        return FALSE;
++    }
+     else
+     {
+         ptr_assign(rsize, 0);
+@@ -321,6 +390,12 @@ bool_t bproc_eread(Proc *proc, byte_t *data, const uint32_t size, uint32_t *rsiz
+         ptr_assign(error, ekPOK);
+         return FALSE;
+     }
++    else if (errno == EAGAIN)
++    {
++        ptr_assign(rsize, 0);
++        ptr_assign(error, ekPAGAIN);
++        return FALSE;
++    }
+     else
+     {
+         ptr_assign(rsize, 0);
+@@ -404,4 +479,4 @@ bool_t bproc_write_close(Proc *proc)
+ void bproc_exit(const uint32_t code)
+ {
+     exit((int)code);
+-}
+\ No newline at end of file
++}
+diff --git a/src/osbs/win/bfile.c b/src/osbs/win/bfile.c
+index d3eac61..5e0eb65 100644
+--- a/src/osbs/win/bfile.c
++++ b/src/osbs/win/bfile.c
+@@ -22,8 +22,8 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
+-#include <ShlObj.h>
++#include <windows.h>
++#include <shlobj.h>
+ #include <sewer/warn.hxx>
+ 
+ struct _dir_t
+diff --git a/src/osbs/win/bmutex.c b/src/osbs/win/bmutex.c
+index 8af11f6..e59edd0 100644
+--- a/src/osbs/win/bmutex.c
++++ b/src/osbs/win/bmutex.c
+@@ -19,7 +19,7 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
++#include <windows.h>
+ #include <sewer/warn.hxx>
+ 
+ /*---------------------------------------------------------------------------*/
+diff --git a/src/osbs/win/bproc.c b/src/osbs/win/bproc.c
+index 574aae4..e389766 100644
+--- a/src/osbs/win/bproc.c
++++ b/src/osbs/win/bproc.c
+@@ -12,6 +12,7 @@
+ 
+ #include "../osbs.inl"
+ #include "../bproc.h"
++#include "../bthread.h"
+ #include <sewer/bmem.h>
+ #include <sewer/cassert.h>
+ #include <sewer/ptr.h>
+@@ -22,7 +23,7 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
++#include <windows.h>
+ #include <sewer/warn.hxx>
+ 
+ #define STDIN_READ_CHILD 0
+@@ -31,10 +32,12 @@
+ #define STDOUT_WRITE_CHILD 3
+ #define STDERR_READ_PARENT 4
+ #define STDERR_WRITE_CHILD 5
++#define CLOSE_WRITE 6
++#define CLOSE_READ 7
+ 
+ struct _process_t
+ {
+-    HANDLE pipes[6];
++    HANDLE pipes[8];
+     PROCESS_INFORMATION info;
+ };
+ 
+@@ -44,7 +47,7 @@ static Proc *i_create(HANDLE *pipes, PROCESS_INFORMATION *info)
+ {
+     Proc *proc = cast(bmem_malloc(sizeof(Proc)), Proc);
+     _osbs_proc_alloc();
+-    bmem_copy_n(proc->pipes, pipes, 6, HANDLE);
++    bmem_copy_n(proc->pipes, pipes, 8, HANDLE);
+     proc->info = *info;
+     return proc;
+ }
+@@ -55,7 +58,7 @@ static void i_close_pipes(HANDLE *pipes)
+ {
+     uint32_t i;
+     cassert_no_null(pipes);
+-    for (i = 0; i < 6; ++i)
++    for (i = 0; i < 8; ++i)
+     {
+         if (pipes[i] != NULL)
+             CloseHandle(pipes[i]);
+@@ -67,10 +70,11 @@ static void i_close_pipes(HANDLE *pipes)
+ static bool_t i_pipes(HANDLE *pipes)
+ {
+     SECURITY_ATTRIBUTES saAttr;
++    DWORD nwMode;
+     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+     saAttr.bInheritHandle = TRUE;
+     saAttr.lpSecurityDescriptor = NULL;
+-    bmem_zero_n(pipes, 6, HANDLE);
++    bmem_zero_n(pipes, 8, HANDLE);
+ 
+     if (!CreatePipe(&pipes[STDIN_READ_CHILD], &pipes[STDIN_WRITE_PARENT], &saAttr, 0))
+     {
+@@ -90,6 +94,13 @@ static bool_t i_pipes(HANDLE *pipes)
+         return FALSE;
+     }
+ 
++    nwMode = PIPE_NOWAIT;
++    if (!SetNamedPipeHandleState(pipes[STDOUT_READ_PARENT], &nwMode, NULL, NULL))
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     if (!SetHandleInformation(pipes[STDOUT_READ_PARENT], HANDLE_FLAG_INHERIT, 0))
+     {
+         i_close_pipes(pipes);
+@@ -102,12 +113,24 @@ static bool_t i_pipes(HANDLE *pipes)
+         return FALSE;
+     }
+ 
++    if (!SetNamedPipeHandleState(pipes[STDERR_READ_PARENT], &nwMode, NULL, NULL))
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     if (!SetHandleInformation(pipes[STDERR_READ_PARENT], HANDLE_FLAG_INHERIT, 0))
+     {
+         i_close_pipes(pipes);
+         return FALSE;
+     }
+ 
++    if (!CreatePipe(&pipes[CLOSE_READ], &pipes[CLOSE_WRITE], NULL, 0))
++    {
++        i_close_pipes(pipes);
++        return FALSE;
++    }
++
+     return TRUE;
+ }
+ 
+@@ -129,7 +152,7 @@ static bool_t i_exec(const char_t *command, HANDLE *pipes, PROCESS_INFORMATION *
+     size = unicode_convers(command, cast((commandw + 7), char_t), ekUTF8, ekUTF16, (1024 - 7) * sizeof(WCHAR));
+     if (size < (1024 - 7) * sizeof(WCHAR))
+     {
+-        BOOL ok = CreateProcess(NULL, commandw, NULL, NULL, TRUE, 0, NULL, NULL, &stinfo, info);
++        BOOL ok = CreateProcess(NULL, commandw, NULL, NULL, TRUE, NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW, NULL, NULL, &stinfo, info);
+         if (ok == TRUE)
+         {
+             /* Close the parent copy of child descriptors */
+@@ -153,7 +176,7 @@ static bool_t i_exec(const char_t *command, HANDLE *pipes, PROCESS_INFORMATION *
+ 
+ Proc *bproc_exec(const char_t *command, perror_t *error)
+ {
+-    HANDLE pipes[6];
++    HANDLE pipes[8];
+     PROCESS_INFORMATION info;
+ 
+     if (i_pipes(pipes) == FALSE)
+@@ -191,6 +214,23 @@ void bproc_close(Proc **proc)
+ 
+ /*---------------------------------------------------------------------------*/
+ 
++void bproc_wait_exit(Proc **proc)
++{
++    cassert_no_null(proc);
++    cassert_no_null(*proc);
++    cassert_no_null((*proc)->info.hProcess);
++    cassert_no_null((*proc)->info.hThread);
++    while (*proc)
++    {
++        BOOL ok = ReadFile((*proc)->pipes[CLOSE_READ], NULL, 0, NULL, NULL);
++        if (!ok && GetLastError() == ERROR_BROKEN_PIPE)
++            break;
++        bthread_sleep(100);
++    }
++}
++
++/*---------------------------------------------------------------------------*/
++
+ bool_t bproc_cancel(Proc *proc)
+ {
+     cassert_no_null(proc);
+@@ -273,6 +313,11 @@ static bool_t i_read_pipe(HANDLE pipe, byte_t *data, const uint32_t size, uint32
+             ptr_assign(rsize, 0);
+             ptr_assign(error, ekPOK);
+         }
++        else if (GetLastError() == ERROR_NO_DATA)
++        {
++            ptr_assign(rsize, 0);
++            ptr_assign(error, ekPAGAIN);
++        }
+         else
+         {
+             ptr_assign(rsize, 0);
+diff --git a/src/osbs/win/bthread.c b/src/osbs/win/bthread.c
+index 0bce1f8..b5975b7 100644
+--- a/src/osbs/win/bthread.c
++++ b/src/osbs/win/bthread.c
+@@ -19,7 +19,7 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
++#include <windows.h>
+ #include <sewer/warn.hxx>
+ 
+ /*---------------------------------------------------------------------------*/
+diff --git a/src/osbs/win/btime.c b/src/osbs/win/btime.c
+index 5e4306d..fdf053b 100644
+--- a/src/osbs/win/btime.c
++++ b/src/osbs/win/btime.c
+@@ -18,7 +18,7 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
++#include <windows.h>
+ #include <sewer/warn.hxx>
+ 
+ #define EPOCHFILETIME (116444736000000000LL)
+diff --git a/src/osbs/win/dlib.c b/src/osbs/win/dlib.c
+index 5b3e3df..e5bab3e 100644
+--- a/src/osbs/win/dlib.c
++++ b/src/osbs/win/dlib.c
+@@ -22,7 +22,7 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
++#include <windows.h>
+ #include <sewer/warn.hxx>
+ 
+ /*---------------------------------------------------------------------------*/
+diff --git a/src/osbs/win/sinfo.c b/src/osbs/win/sinfo.c
+index 2568779..6822882 100644
+--- a/src/osbs/win/sinfo.c
++++ b/src/osbs/win/sinfo.c
+@@ -20,7 +20,7 @@
+ 
+ #include <sewer/nowarn.hxx>
+ 
+-#include <Windows.h>
++#include <windows.h>
+ #undef __VERSION_HELPERS__
+ 
+ #if defined(_MSC_VER)
+@@ -32,7 +32,7 @@
+ #endif
+ 
+ #if defined __VERSION_HELPERS__
+-#include <VersionHelpers.h>
++#include <versionhelpers.h>
+ #endif
+ 
+ #include <sewer/warn.hxx>
+diff --git a/src/osgui/gtk/osglobals.c b/src/osgui/gtk/osglobals.c
+index 43cd2cb..98a979a 100644
+--- a/src/osgui/gtk/osglobals.c
++++ b/src/osgui/gtk/osglobals.c
+@@ -244,7 +244,8 @@ static color_t i_frame_color(GtkWidget *widget, const uint32_t size, const bool_
+ static void i_precompute_colors(void)
+ {
+     real32_t r = 0, g = 0, b = 0;
+-    cassert(kLABEL_COLOR == 0);
++    /* TODO: should be scheme aware */
++    /* cassert(kLABEL_COLOR == 0); */
+     cassert(i_IMPOSTOR_MAPPED == TRUE);
+     kLABEL_COLOR = i_color_prop(kLABEL, "color", GTK_STATE_FLAG_ACTIVE);
+     kVIEW_COLOR = i_color_prop(kWINDOW, "background-color", GTK_STATE_FLAG_NORMAL);
+@@ -543,29 +544,25 @@ color_t osglobals_color(const syscolor_t *color)
+     cassert_no_null(color);
+     cassert(kWINDOW != NULL);
+ 
++    /* TODO: should be scheme aware */
+     switch (*color)
+     {
+     case ekSYSCOLOR_DARKMODE:
+         return kDARK_MODE;
+ 
+     case ekSYSCOLOR_LABEL:
+-        cassert(kLABEL_COLOR != 0);
+         return kLABEL_COLOR;
+ 
+     case ekSYSCOLOR_VIEW:
+-        cassert(kVIEW_COLOR != 0);
+         return kVIEW_COLOR;
+ 
+     case ekSYSCOLOR_LINE:
+-        cassert(kLINE_COLOR != 0);
+         return kLINE_COLOR;
+ 
+     case ekSYSCOLOR_LINK:
+-        cassert(kLINK_COLOR != 0);
+         return kLINK_COLOR;
+ 
+     case ekSYSCOLOR_BORDER:
+-        cassert(kBORD_COLOR != 0);
+         return kBORD_COLOR;
+ 
+         cassert_default();
+@@ -586,6 +583,12 @@ void osglobals_resolution(const void *non_used, real32_t *width, real32_t *heigh
+         GdkDisplay *display = gdk_display_get_default();
+         GdkMonitor *primary_monitor = gdk_display_get_primary_monitor(display);
+         GdkRectangle monitor_geometry;
++        if (!primary_monitor)
++        {
++            /* probably wayland, https://discourse.gnome.org/t/get-screen-width-and-height/7245/11 */
++            GdkWindow *window = gdk_get_default_root_window();
++            primary_monitor = gdk_display_get_monitor_at_window(display, window);
++        }
+         gdk_monitor_get_geometry(primary_monitor, &monitor_geometry);
+         *width = (real32_t)monitor_geometry.width;
+         *height = (real32_t)monitor_geometry.height;
+@@ -1327,3 +1330,10 @@ void _osglobals_restore_focus(GtkWidget *window, GtkWidget *widget)
+     kRESTORE_FOCUS_WINDOW = window;
+     kRESTORE_FOCUS_WIDGET = widget;
+ }
++
++/*---------------------------------------------------------------------------*/
++
++void osglobals_theme_changed(void)
++{
++    i_precompute_colors();
++}
+diff --git a/src/osgui/gtk/ostext.c b/src/osgui/gtk/ostext.c
+index 53b271d..d717ef7 100644
+--- a/src/osgui/gtk/ostext.c
++++ b/src/osgui/gtk/ostext.c
+@@ -818,6 +818,19 @@ void ostext_property(OSText *view, const gui_text_t prop, const void *value)
+         i_set_wrap_mode(view->tview, wrap);
+         break;
+     }
++
++    case ekGUI_TEXT_DELETE:
++    {
++        GtkTextIter start, end;
++        gtk_text_buffer_get_selection_bounds(view->buffer, &start, &end);
++        if (view->select_start != INT32_MAX)
++        {
++            i_iter(view->buffer, view->select_start, &start);
++            i_iter(view->buffer, view->select_end, &end);
++            gtk_text_buffer_delete(view->buffer, &start, &end);
++        }
++        break;
++    }
+         cassert_default();
+     }
+ }
+diff --git a/src/osgui/gtk/oswindow.c b/src/osgui/gtk/oswindow.c
+index 6b88de9..a4c9128 100644
+--- a/src/osgui/gtk/oswindow.c
++++ b/src/osgui/gtk/oswindow.c
+@@ -27,6 +27,7 @@
+ #include <core/arrst.h>
+ #include <core/event.h>
+ #include <core/heap.h>
++#include <core/strings.h>
+ #include <sewer/cassert.h>
+ 
+ #if !defined(__GTK3__)
+@@ -36,6 +37,7 @@
+ struct _oswindow_t
+ {
+     OSControl control;
++    GtkWidget *header;
+     OSMenu *menu;
+     GMainLoop *runloop;
+     uint32_t modal_return;
+@@ -145,6 +147,7 @@ static gboolean i_OnConfigure(GtkWidget *widget, GdkEventConfigure *event, OSWin
+         return FALSE;
+     }
+ 
++    /* TODO: Wayland will skip some resize events https://github.com/rust-windowing/winit/issues/2499#issuecomment-1292193225 */
+     if (window->current_width > 0 && (window->current_width != event->width || window->current_height != event->height))
+     {
+         if (window->is_resizable == TRUE && window->OnResize != NULL)
+@@ -317,7 +320,6 @@ static ___INLINE GtkWidget *i_gtk_window(const uint32_t flags)
+     else
+     {
+         window = gtk_application_window_new(i_GTK_APP);
+-        gtk_window_set_decorated(GTK_WINDOW(window), (flags & ekWINDOW_TITLE) ? TRUE : FALSE);
+     }
+ 
+     return window;
+@@ -383,6 +385,38 @@ OSWindow *oswindow_create(const uint32_t flags)
+         gtk_window_set_icon(GTK_WINDOW(window->control.widget), i_APP_ICON);
+     }
+ 
++    {
++        GdkDisplay *display = gdk_display_get_default();
++        const char_t *name = gdk_display_get_name(display);
++        if (str_is_prefix(name, "wayland"))
++        {
++            /*
++                Intentionally FALSE here as CSD seems quite tough to accomplish.
++                Setting it to TRUE works for initial view but resize will not work.
++             */
++            gtk_window_set_decorated(GTK_WINDOW(window->control.widget), FALSE);
++
++            window->header = gtk_header_bar_new();
++            {
++                const char *css = "headerbar { border: 0; min-height: 0; } window { border-radius: 5px 5px 0px 0px; }";
++                GtkCssProvider *css_provider = gtk_css_provider_new();
++                GtkStyleContext *style_context = gtk_widget_get_style_context(window->header);
++                gtk_css_provider_load_from_data(css_provider, css, -1, NULL);
++                gtk_style_context_add_provider(style_context, GTK_STYLE_PROVIDER(css_provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
++
++                gtk_header_bar_set_subtitle(GTK_HEADER_BAR(window->header), 0);
++                gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(window->header), 1);
++                gtk_window_set_titlebar(GTK_WINDOW(window->control.widget), window->header);
++
++                style_context = gtk_widget_get_style_context(window->control.widget);
++                gtk_style_context_add_provider(style_context, GTK_STYLE_PROVIDER(css_provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
++            }
++        }
++        else
++        {
++            gtk_window_set_decorated(GTK_WINDOW(window->control.widget), flags & ekWINDOW_TITLE);
++        }
++    }
+     return window;
+ }
+ 
+@@ -452,7 +486,15 @@ void oswindow_destroy(OSWindow **window)
+     listener_destroy(&(*window)->OnClose);
+     _oswindow_hotkey_destroy(&(*window)->hotkeys);
+     _ostabstop_remove(&(*window)->tabstop);
+-    cassert(i_num_children((*window)->control.widget) == 1);
++    if ((*window)->header)
++    {
++        cassert(i_num_children((*window)->control.widget) == 2);
++        gtk_widget_destroy((*window)->header);
++    }
++    else
++    {
++        cassert(i_num_children((*window)->control.widget) == 1);
++    }
+     cassert(i_num_children(gtk_bin_get_child(GTK_BIN((*window)->control.widget))) == 0);
+     g_object_unref((*window)->control.widget);
+     heap_delete(window, OSWindow);
+@@ -487,7 +529,10 @@ void oswindow_OnClose(OSWindow *window, Listener *listener)
+ void oswindow_title(OSWindow *window, const char_t *text)
+ {
+     cassert_no_null(window);
+-    gtk_window_set_title(GTK_WINDOW(window->control.widget), cast_const(text, gchar));
++    if (window->header)
++        gtk_header_bar_set_title(GTK_HEADER_BAR(window->header), cast_const(text, gchar));
++    else
++        gtk_window_set_title(GTK_WINDOW(window->control.widget), cast_const(text, gchar));
+ }
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -659,6 +704,8 @@ void oswindow_launch(OSWindow *window, OSWindow *parent_window)
+         window->role = ekGUI_ROLE_MAIN;
+     }
+ 
++    /* if (window->header)
++        gtk_widget_show(window->header); */
+     gtk_widget_show(window->control.widget);
+     _ostabstop_restore(&window->tabstop);
+ }
+diff --git a/src/osgui/osx/ostext.m b/src/osgui/osx/ostext.m
+index 50d7b41..2d3d9f8 100644
+--- a/src/osgui/osx/ostext.m
++++ b/src/osgui/osx/ostext.m
+@@ -760,6 +760,20 @@ void ostext_property(OSText *view, const gui_text_t param, const void *value)
+         i_apply_sel(lview);
+         break;
+ 
++    /* untested */
++    case ekGUI_TEXT_DELETE:
++        if (lview->is_editable == YES)
++        {
++            [[lview textStorage] replaceCharactersInRange:[lview selectedRange] withString:nil];
++        }
++        else
++        {
++            [lview setEditable:YES];
++            [[lview textStorage] replaceCharactersInRange:[lview selectedRange] withString:nil];
++            [lview setEditable:NO];
++        }
++        break;
++
+         cassert_default();
+     }
+ }
+diff --git a/src/osgui/win/oscomwin.c b/src/osgui/win/oscomwin.c
+index d20854b..3d19dff 100644
+--- a/src/osgui/win/oscomwin.c
++++ b/src/osgui/win/oscomwin.c
+@@ -23,8 +23,8 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Windows.h>
+-#include <ShlObj.h>
++#include <windows.h>
++#include <shlobj.h>
+ #include <sewer/warn.hxx>
+ 
+ /*---------------------------------------------------------------------------*/
+diff --git a/src/osgui/win/osgui_win.cpp b/src/osgui/win/osgui_win.cpp
+index d302852..e884067 100644
+--- a/src/osgui/win/osgui_win.cpp
++++ b/src/osgui/win/osgui_win.cpp
+@@ -27,8 +27,8 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Commctrl.h>
+-#include <Richedit.h>
++#include <commctrl.h>
++#include <richedit.h>
+ #include <uxtheme.h>
+ #include <gdiplus.h>
+ #include <sewer/warn.hxx>
+diff --git a/src/osgui/win/osimglist.c b/src/osgui/win/osimglist.c
+index b4d9db7..62936db 100644
+--- a/src/osgui/win/osimglist.c
++++ b/src/osgui/win/osimglist.c
+@@ -20,7 +20,7 @@
+ #include <sewer/ptr.h>
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Commctrl.h>
++#include <commctrl.h>
+ #include <sewer/warn.hxx>
+ 
+ struct _osimglist_t
+diff --git a/src/osgui/win/osprogress.c b/src/osgui/win/osprogress.c
+index 2fe8fe0..0d305d9 100644
+--- a/src/osgui/win/osprogress.c
++++ b/src/osgui/win/osprogress.c
+@@ -22,7 +22,7 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Commctrl.h>
++#include <commctrl.h>
+ #include <sewer/warn.hxx>
+ 
+ struct _osprogress_t
+diff --git a/src/osgui/win/osslider.c b/src/osgui/win/osslider.c
+index ee2b4b2..d51600e 100644
+--- a/src/osgui/win/osslider.c
++++ b/src/osgui/win/osslider.c
+@@ -26,7 +26,7 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Commctrl.h>
++#include <commctrl.h>
+ #include <sewer/warn.hxx>
+ 
+ struct _osslider_t
+diff --git a/src/osgui/win/ostext.c b/src/osgui/win/ostext.c
+index b808d34..5224c61 100644
+--- a/src/osgui/win/ostext.c
++++ b/src/osgui/win/ostext.c
+@@ -31,7 +31,7 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Richedit.h>
++#include <richedit.h>
+ #include <sewer/warn.hxx>
+ 
+ struct _ostext_t
+@@ -487,6 +487,10 @@ void ostext_property(OSText *view, const gui_text_t prop, const void *value)
+         break;
+     }
+ 
++    case ekGUI_TEXT_DELETE:
++        SendMessage(view->control.hwnd, EM_REPLACESEL, 0, (LPARAM)NULL);
++        break;
++
+         cassert_default();
+     }
+ }
+diff --git a/src/osgui/win/ostooltip.c b/src/osgui/win/ostooltip.c
+index 25d3844..cebf83f 100644
+--- a/src/osgui/win/ostooltip.c
++++ b/src/osgui/win/ostooltip.c
+@@ -20,7 +20,7 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Commctrl.h>
++#include <commctrl.h>
+ #include <sewer/warn.hxx>
+ 
+ /*---------------------------------------------------------------------------*/
+diff --git a/src/osgui/win/osupdown.c b/src/osgui/win/osupdown.c
+index 7ea850a..91235ed 100644
+--- a/src/osgui/win/osupdown.c
++++ b/src/osgui/win/osupdown.c
+@@ -26,7 +26,7 @@
+ #endif
+ 
+ #include <sewer/nowarn.hxx>
+-#include <Commctrl.h>
++#include <commctrl.h>
+ #include <sewer/warn.hxx>
+ 
+ struct _osupdown_t
+diff --git a/src/osgui/win/osview.cpp b/src/osgui/win/osview.cpp
+index b38c320..16dd26d 100644
+--- a/src/osgui/win/osview.cpp
++++ b/src/osgui/win/osview.cpp
+@@ -36,7 +36,7 @@
+ 
+ #include <sewer/nowarn.hxx>
+ #include <gdiplus.h>
+-#include <Commctrl.h>
++#include <commctrl.h>
+ #include <sewer/warn.hxx>
+ 
+ struct _osview_t
+diff --git a/src/sewer/win/bstdimp.c b/src/sewer/win/bstdimp.c
+index ae4448f..9e44a09 100644
+--- a/src/sewer/win/bstdimp.c
++++ b/src/sewer/win/bstdimp.c
+@@ -22,7 +22,7 @@
+ #endif
+ 
+ #include "../nowarn.hxx"
+-#include <Windows.h>
++#include <windows.h>
+ #include <stdio.h>
+ #include "../warn.hxx"
+ 

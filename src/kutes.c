@@ -4,6 +4,8 @@
 #include <yyjson.h>
 #include <nappgui.h>
 
+byte_t bmatch[kTEXTFILTER_SIZE];
+
 /*---------------------------------------------------------------------------*/
 
 struct _inops_t
@@ -31,6 +33,50 @@ static uint32_t bg_proc_main(App *app)
 {
     bproc_wait_exit(&app->proc);
     return 0;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_OnEditFilter(App *app, Event *e)
+{
+    const EvText *p = event_params(e, EvText);
+    EvTextFilter *r = event_result(e, EvTextFilter);
+    const char_t *cmdin = p->text;
+    uint32_t pos = p->cpos;
+    uint32_t bmatch_len = 0;
+
+    if (!app->complete)
+        return;
+
+    /* don't suggest anything if whole line is deleted */
+    if (!pos && p->len < 0)
+    {
+        r->text[0] = '\0';
+        r->apply = TRUE;
+        return;
+    }
+
+    bmatch_len = history_search(app->hist, cast(cmdin, byte_t), pos, bmatch, kTEXTFILTER_SIZE);
+    if (bmatch_len)
+    {
+        bmem_copy(cast(r->text, byte_t), bmatch, bmatch_len);
+        r->text[bmatch_len] = '\0';
+    }
+    else
+    {
+        bmem_copy(cast(r->text, byte_t), cast(p->text, byte_t), p->cpos);
+        r->text[p->cpos] = '\0';
+    }
+    r->cpos = p->cpos;
+    r->apply = TRUE;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void i_OnEditChange(App *app, Event *e)
+{
+    const EvText *p = event_params(e, EvText);
+    app->cpos = p->cpos;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -186,7 +232,13 @@ static void i_OnRun(App *app, Event *e)
 
         if (cmdin && cmdin[0])
         {
-            app->proc = bproc_exec(cmdin, NULL);
+            uint32_t len = app->cpos;
+            if (cmdin[0] != ' ')
+                history_append(app->hist, cast(cmdin, byte_t), len);
+            bmem_copy(bmatch, cast(cmdin, byte_t), len);
+            bmatch[len] = '\0';
+
+            app->proc = bproc_exec(cast(bmatch, char_t), NULL);
             app->run_state = ktRUN_INPROGRESS;
             edit_editable(app->cmdin, FALSE);
             cell_enabled(app->nolimitb, FALSE);
@@ -404,6 +456,14 @@ static void i_OnPopupSelect(App *app, Event *e)
 
 /*---------------------------------------------------------------------------*/
 
+static void i_OnComplete(App *app, Event *e)
+{
+    const EvButton *p = event_params(e, EvButton);
+    app->complete = p->state == ekGUI_ON ? TRUE : FALSE;
+}
+
+/*---------------------------------------------------------------------------*/
+
 static void i_OnInvert(App *app, Event *e)
 {
 #if defined(__LINUX__)
@@ -425,7 +485,7 @@ static Panel *i_panel(App *app)
     Layout *pane = layout_create(1, 1);
     Layout *main = layout_create(1, 3);
     Layout *input = layout_create(1, 2);
-    Layout *inops = layout_create(2, 1);
+    Layout *inops = layout_create(3, 1);
     Layout *vscroll = layout_create(1, 1);
     Layout *state = layout_create(2, 1);
 
@@ -433,6 +493,7 @@ static Panel *i_panel(App *app)
     Edit *cmdin = edit_multiline();
     Button *run = button_push();
     PopUp *vselect = popup_create();
+    Button *complete = button_check();
 
     Layout *result = layout_create(1, 2);
     Layout *ops = layout_create(7, 1);
@@ -462,6 +523,8 @@ static Panel *i_panel(App *app)
     /* edit_phstyle(cmdin, ekFITALIC);
     edit_phtext(cmdin, "... on your command ..."); */
     edit_font(cmdin, font);
+    edit_OnFilter(cmdin, listener(app, i_OnEditFilter, App));
+    edit_OnChange(cmdin, listener(app, i_OnEditChange, App));
     font_destroy(&font);
     layout_edit(input, cmdin, 0, 0);
 
@@ -475,6 +538,12 @@ static Panel *i_panel(App *app)
 
     layout_popup(inops, vselect, 1, 0);
     layout_hexpand(inops, 1);
+
+    button_text(complete, "complete");
+    button_state(complete, ekGUI_ON);
+    button_OnClick(complete, listener(app, i_OnComplete, App));
+
+    layout_button(inops, complete, 2, 0);
 
     layout_layout(input, inops, 0, 1);
 
@@ -612,6 +681,8 @@ static App *i_create(void)
     app->dsize = gui_resolution();
     panel = i_panel(app);
     app->window = window_create(ekWINDOW_STDRES);
+    app->hist = history_load();
+    app->complete = TRUE;
     app->pos_cache = arrst_create(uint32_t);
     app->run_state = ktRUN_ENDED;
     app->alc = alc_init("yyjson");
@@ -642,6 +713,7 @@ static void i_destroy(App **app)
         yyjson_mut_doc_free((*app)->doc);
     if ((*app)->uthread)
         uthread_destroy(&(*app)->uthread);
+    history_flush(&(*app)->hist);
     arrpt_destroy(&(*app)->views, viewdata_destroy, Destroyer);
     arrst_destroy(&(*app)->pos_cache, NULL, uint32_t);
     heap_delete_n(&(*app)->parse_buf, (*app)->parse_size, byte_t);

@@ -86,7 +86,7 @@ PATCH_FILE :=
 create-patch: ## creates patch file from vendor folder changes
 	@test "x${PATCH_FILE}" != x
 	@pushd ../
-	@git diff vendor/ | sed 's,vendor/nappgui_src/cache/src,src,g' > support/patches/${PATCH_FILE}
+	@git diff vendor/ | sed 's,vendor/nappgui_src/cache/,,g' > support/patches/${PATCH_FILE}
 	@popd
 
 EXTRA_ARGS :=

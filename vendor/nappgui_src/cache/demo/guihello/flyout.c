@@ -189,7 +189,7 @@ static void i_OnDown(FlyOut *flyout, Event *e)
             bstd_sprintf(text, sizeof(text), "Item %d Option %d", p->tag + 1, i + 1);
             menuitem_text(item, text);
             menuitem_OnClick(item, listener(flyout, i_OnMenu, FlyOut));
-            menu_item(flyout->menu, item);
+            menu_add_item(flyout->menu, item);
         }
 
         {
@@ -226,8 +226,9 @@ static Layout *i_layout(FlyOut *flyout)
     Layout *layout2 = i_align_layout(flyout);
     Layout *layout3 = i_controls_layout(flyout);
     Layout *layout4 = i_listbox_layout(flyout);
-    Label *label1 = label_multiline();
+    Label *label1 = label_create();
     Label *label2 = label_create();
+    label_multiline(label1, TRUE);
     label_text(label1, "A flyout window will be show when you press ... button\nPress [ESC] or [RETURN] to close the flyout window");
     label_text(label2, "A popup menu will be show when right click in ListBox");
     layout_label(layout1, label1, 0, 0);

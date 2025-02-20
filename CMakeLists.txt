@@ -15,13 +15,16 @@ project(
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CPM_SOURCE_CACHE vendor/)
+# MIT LICENSE
 file(
   DOWNLOAD
   https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.5/CPM.cmake
   ${CMAKE_CURRENT_SOURCE_DIR}/support/CPM.cmake
   EXPECTED_HASH SHA256=c46b876ae3b9f994b4f05a4c15553e0485636862064f1fcc9d8b4f832086bc5d
 )
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/support/CPM.cmake)
+# MIT LICENSE
 CPMAddPackage(
   NAME yyjson
   # commit is on Jan 25, 2025
@@ -30,27 +33,43 @@ CPMAddPackage(
   DOWNLOAD_ONLY TRUE
   CUSTOM_CACHE_KEY cache
 )
+
 # files ending and meaning
 # - not used anymore
 # + individual patches
 # *-checkpoint-<commit>-patch clubbing of all individual patches which can be applied directly on that src commit
 file(GLOB NAP_PATCHES "support/patches/nap-*.patch")
+# MIT LICENSE
 CPMAddPackage(
   NAME nappgui_src
   # commit is on Feb 9, 2025
-  URL https://github.com/frang75/nappgui_src/archive/8639d19.tar.gz
-  URL_HASH SHA256=c6aef21a5dedacb737a9579b23337eeaf5a6d24b953fb06fb69220697ba93eb1
+  URL https://github.com/frang75/nappgui_src/archive/788f43a.tar.gz
+  URL_HASH SHA256=59e2d11a97eefa3e237106f59b60202a3f17db732ab4d2aa3b804cc3235a3f8f
   PATCHES ${NAP_PATCHES}
   DOWNLOAD_ONLY TRUE
   CUSTOM_CACHE_KEY cache
 )
+
 file(GLOB BRN_PATCHES "support/patches/brn-*.patch")
+# LGPLv3 LICENSE
 CPMAddPackage(
   NAME boron
   # commit is on Jan 23, 2025
   URL https://codeberg.org/wickedsmoke/boron/archive/64ca99397d.tar.gz
   URL_HASH SHA256=f01d6b94154a9613d2bac1e0562b9c2b78adf8320bf36789fa4200cc48cbc351
   PATCHES ${BRN_PATCHES}
+  DOWNLOAD_ONLY TRUE
+  CUSTOM_CACHE_KEY cache
+)
+
+file(GLOB RAX_PATCHES "support/patches/rax-*.patch")
+# BSD-2-Clause LICENSE
+CPMAddPackage(
+  NAME rax
+  # commit is on Sep 23, 2024
+  URL https://github.com/jcorporation/rax/archive/8760a30.tar.gz
+  URL_HASH SHA256=83a37f38a0e6531521428535334519d00a16ae6829511b7a0e4c2f282becdeca
+  PATCHES ${RAX_PATCHES}
   DOWNLOAD_ONLY TRUE
   CUSTOM_CACHE_KEY cache
 )
@@ -76,9 +95,17 @@ if (yyjson_ADDED)
 endif()
 
 if (boron_ADDED)
-  # TODO: dynamic linking, deferring as it is harder
-  # using SYSTEM here to suppress warnings from boron
-  add_subdirectory(${boron_SOURCE_DIR} EXCLUDE_FROM_ALL SYSTEM)
+  add_subdirectory(${boron_SOURCE_DIR} EXCLUDE_FROM_ALL)
+endif()
+
+if (rax_ADDED)
+  set(RAX_BUILD_TESTS FALSE)
+  add_subdirectory(${rax_SOURCE_DIR} EXCLUDE_FROM_ALL)
 endif()
 
 add_subdirectory(src)
+# add_subdirectory(support/exp/line)
+
+# set(NAPPGUI_NRC build-linux64/tools/build/Debug/bin/nrc)
+# include(${NAPPGUI_ROOT_PATH}/prj/NAppTarget.cmake)
+# add_subdirectory(${nappgui_src_SOURCE_DIR}/demo/guihello)

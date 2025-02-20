@@ -1,0 +1,14 @@
+Update cmake version in rax
+
+Signed-off-by: Leela Venkaiah G <leelavg@thoughtexpo.com>
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3712553..91748b7 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 3.1)
++cmake_minimum_required(VERSION 3.22.0 FATAL_ERROR)
+ 
+ project(rax C)
+ 
