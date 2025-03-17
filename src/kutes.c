@@ -6,6 +6,20 @@
 
 byte_t bmatch[kTEXTFILTER_SIZE];
 
+struct line
+{
+    char_t name[80];
+    uint32_t num;
+};
+DeclSt(line);
+
+typedef struct line_pos
+{
+    uint32_t start;
+    uint32_t end;
+} line_pos;
+DeclSt(line_pos);
+
 /*---------------------------------------------------------------------------*/
 
 struct _inops_t
@@ -33,6 +47,12 @@ static uint32_t bg_proc_main(App *app)
 {
     bproc_wait_exit(&app->proc);
     return 0;
+}
+
+static void replace_line(App *app, Event *e)
+{
+    const EvButton *p = event_params(e, EvButton);
+    app->replace_line = p->state == ekGUI_ON ? TRUE : FALSE;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -79,7 +99,112 @@ static void i_OnEditChange(App *app, Event *e)
     app->cpos = p->cpos;
 }
 
-/*---------------------------------------------------------------------------*/
+static int line_cmp(const line *a, const line *b)
+{
+    return blib_strcmp(a->name, b->name);
+}
+
+static void replace_result(App *app)
+{
+    uint32_t i;
+    line *val, key;
+    line_pos pos_new, *pos_old;
+    for (i = 0; i < app->rsize; ++i)
+    {
+        if (app->read_buf[i] == '\n')
+        {
+            uint32_t space;
+            for (space = 0; space < app->cur_start && app->cur_line[space] != ' '; ++space)
+            {
+            }
+
+            app->cur_line[app->cur_start] = '\n';
+            app->cur_line[app->cur_start + 1] = '\0';
+
+            bmem_copy(cast(key.name, byte_t), cast(app->cur_line, byte_t), space);
+            key.name[space] = '\0';
+            val = setst_get(app->dict, &key, line, line);
+            if (val)
+            {
+                int32_t diff = 0;
+                pos_old = arrst_get(app->pos_lens, val->num, line_pos);
+                textview_select(app->cmdout, -1, -1);
+                textview_select(app->cmdout, pos_old->start, pos_old->end + 1);
+                textview_cpos_printf(app->cmdout, "%s", app->cur_line);
+
+                diff = (pos_old->start + app->cur_start - pos_old->end);
+                pos_old->end += diff;
+                textview_select(app->cmdout, pos_old->start, pos_old->end);
+                /* propagate the diff to succeeding lines */
+                if (diff && val->num < app->line_num)
+                {
+                    uint32_t st = val->num + 1;
+                    pos_old = arrst_all(app->pos_lens, line_pos);
+                    pos_old += st;
+                    for (; st < app->line_num; st++, pos_old++)
+                    {
+                        pos_old->start += diff;
+                        pos_old->end += diff;
+                    }
+                }
+            }
+            else
+            {
+                val = setst_insert(app->dict, &key, line, line);
+                cassert_no_null(val);
+                blib_strcpy(val->name, 80, key.name);
+                val->num = app->line_num;
+
+                if (app->line_num > 0)
+                {
+                    line_pos *prev = arrst_get(app->pos_lens, app->line_num - 1, line_pos);
+                    pos_new.start = pos_new.end = prev->end + 1;
+                }
+                else
+                {
+                    pos_new.start = pos_new.end = 0;
+                }
+                pos_new.end += app->cur_start;
+                arrst_append(app->pos_lens, pos_new, line_pos);
+                textview_select(app->cmdout, -1, -1);
+                textview_printf(app->cmdout, "%s", app->cur_line);
+                app->line_num++;
+            }
+            app->cur_start = 0;
+        }
+        else
+        {
+            app->cur_line[app->cur_start++] = app->read_buf[i];
+        }
+    }
+    textview_scroll_caret(app->cmdout);
+}
+
+static void write_result(App *app)
+{
+    if (app->nolimit && app->out_len + app->rsize > app->parse_size)
+    {
+        /* TODO: what if this fails and old pointer is lost?, in assert mode this throws a fatal error */
+        app->parse_buf = heap_realloc_n(app->parse_buf, app->parse_size, app->parse_size + INCR_PARSE_SIZE, byte_t);
+        app->parse_size += INCR_PARSE_SIZE;
+    }
+
+    if (app->nolimit || app->out_len < INITIAL_PARSE_SIZE)
+        bmem_copy(app->parse_buf + (app->out_len * sizeof(char_t)), app->read_buf, app->rsize);
+
+    app->read_buf[app->rsize] = '\0';
+    app->out_len += app->rsize;
+    if (button_get_state(app->noshow) == ekGUI_OFF)
+    {
+        if (app->out_len > MAX_OUT_SIZE)
+        {
+            textview_select(app->cmdout, 0, app->rsize);
+            textview_del_select(app->cmdout);
+            textview_select(app->cmdout, -1, -1);
+        }
+        textview_writef(app->cmdout, cast(app->read_buf, char_t));
+    }
+}
 
 static void i_run_update(App *app)
 {
@@ -99,28 +224,10 @@ static void i_run_update(App *app)
 
     if (bproc_read(app->proc, app->read_buf, READ_BUFFER - 1, &app->rsize, &out))
     {
-        if (app->nolimit && app->out_len + app->rsize > app->parse_size)
-        {
-            /* TODO: what if this fails and old pointer is lost?, in assert mode this throws a fatal error */
-            app->parse_buf = heap_realloc_n(app->parse_buf, app->parse_size, app->parse_size + INCR_PARSE_SIZE, byte_t);
-            app->parse_size += INCR_PARSE_SIZE;
-        }
-
-        if (app->nolimit || app->out_len < INITIAL_PARSE_SIZE)
-            bmem_copy(app->parse_buf + (app->out_len * sizeof(char_t)), app->read_buf, app->rsize);
-
-        app->read_buf[app->rsize] = '\0';
-        app->out_len += app->rsize;
-        if (button_get_state(app->noshow) == ekGUI_OFF)
-        {
-            if (app->out_len > MAX_OUT_SIZE)
-            {
-                textview_select(app->cmdout, 0, app->rsize);
-                textview_del_sel(app->cmdout);
-                textview_select(app->cmdout, -1, -1);
-            }
-            textview_writef(app->cmdout, cast(app->read_buf, char_t));
-        }
+        if (app->replace_line)
+            replace_result(app);
+        else
+            write_result(app);
         read0 = FALSE;
     }
 
@@ -131,7 +238,7 @@ static void i_run_update(App *app)
         if (app->err_len > MAX_ERR_SIZE)
         {
             textview_select(app->cmderr, 0, app->rsize);
-            textview_del_sel(app->cmderr);
+            textview_del_select(app->cmderr);
             textview_select(app->cmderr, -1, -1);
         }
         textview_writef(app->cmderr, cast(app->read_buf, char_t));
@@ -156,8 +263,14 @@ static void i_run_update(App *app)
 static void i_run_end(App *app, const uint32_t rval)
 {
     /* reset state */
+    if (app->replace_line)
+    {
+        arrst_clear(app->pos_lens, NULL, line_pos);
+        setst_destroy(&app->dict, NULL, line);
+    }
     edit_editable(app->cmdin, TRUE);
     cell_enabled(app->nolimitb, TRUE);
+    cell_enabled(app->replace, TRUE);
     button_text(app->run, bt_run);
     app->stop = FALSE;
     if (app->run_state == ktRUN_COMPLETE)
@@ -233,6 +346,9 @@ static void i_OnRun(App *app, Event *e)
         if (cmdin && cmdin[0])
         {
             uint32_t len = app->cpos;
+            /* anything before cursor is only run */
+            if (!len)
+                return;
             if (cmdin[0] != ' ')
                 history_append(app->hist, cast(cmdin, byte_t), len);
             bmem_copy(bmatch, cast(cmdin, byte_t), len);
@@ -242,9 +358,15 @@ static void i_OnRun(App *app, Event *e)
             app->run_state = ktRUN_INPROGRESS;
             edit_editable(app->cmdin, FALSE);
             cell_enabled(app->nolimitb, FALSE);
+            cell_enabled(app->replace, FALSE);
             label_text(app->status, st_running);
             bproc_write_close(app->proc);
             button_text(app->run, bt_stop);
+            if (app->replace_line)
+            {
+                app->line_num = 0;
+                app->dict = setst_create(line_cmp, line, line);
+            }
             osapp_task(app, 0., bg_proc_main, i_run_update, i_run_end, App);
         }
     }
@@ -485,7 +607,7 @@ static Panel *i_panel(App *app)
     Layout *pane = layout_create(1, 1);
     Layout *main = layout_create(1, 3);
     Layout *input = layout_create(1, 2);
-    Layout *inops = layout_create(3, 1);
+    Layout *inops = layout_create(4, 1);
     Layout *vscroll = layout_create(1, 1);
     Layout *state = layout_create(2, 1);
 
@@ -493,6 +615,7 @@ static Panel *i_panel(App *app)
     Edit *cmdin = edit_multiline();
     Button *run = button_push();
     PopUp *vselect = popup_create();
+    Button *replace = button_check();
     Button *complete = button_check();
 
     Layout *result = layout_create(1, 2);
@@ -544,6 +667,11 @@ static Panel *i_panel(App *app)
     button_OnClick(complete, listener(app, i_OnComplete, App));
 
     layout_button(inops, complete, 2, 0);
+
+    button_text(replace, "replace");
+    button_OnClick(replace, listener(app, replace_line, App));
+
+    layout_button(inops, replace, 3, 0);
 
     layout_layout(input, inops, 0, 1);
 
@@ -635,6 +763,7 @@ static Panel *i_panel(App *app)
     app->run = run;
     app->vselect = vselect;
     app->vscroll = vscroll;
+    app->replace = layout_cell(inops, 3, 0);
     app->tail = tail;
     app->search = search;
     app->err_search = err_search;
@@ -691,6 +820,7 @@ static App *i_create(void)
     app->nolimit = FALSE;
     app->doc = NULL;
     app->views = arrpt_create(Destroyer);
+    app->pos_lens = arrst_create(line_pos);
     cols_bind();
 
     window_panel(app->window, panel);
@@ -713,6 +843,9 @@ static void i_destroy(App **app)
         yyjson_mut_doc_free((*app)->doc);
     if ((*app)->uthread)
         uthread_destroy(&(*app)->uthread);
+    if ((*app)->dict)
+        setst_destroy(&(*app)->dict, NULL, line);
+    arrst_destroy(&(*app)->pos_lens, NULL, line_pos);
     history_flush(&(*app)->hist);
     arrpt_destroy(&(*app)->views, viewdata_destroy, Destroyer);
     arrst_destroy(&(*app)->pos_cache, NULL, uint32_t);

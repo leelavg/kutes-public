@@ -43,23 +43,22 @@ DeclPt(Destroyer);
 typedef struct _inops_t opsv;
 typedef struct _history_t History;
 
+typedef struct line line;
 typedef struct _app_t App;
 struct _app_t
 {
-    /* data */
     byte_t read_buf[READ_BUFFER];
     byte_t *parse_buf;
     uint32_t parse_size;
     S2Df dsize;
     UThread *uthread;
 
-    /* control */
     Window *window;
     Edit *cmdin;
     Button *run;
     PopUp *vselect;
     Layout *vscroll;
-    ListBox *listb;
+    Cell *replace;
     Button *tail;
     Edit *search;
     Button *err_search;
@@ -70,7 +69,6 @@ struct _app_t
     Label *status;
     opsv *locker;
 
-    /* state */
     const char_t *start_ptr;
     ArrSt(uint32_t) *pos_cache;
     Proc *proc;
@@ -86,12 +84,18 @@ struct _app_t
     bool_t stop;
     bool_t nolimit;
     bool_t complete;
+    bool_t replace_line;
 
-    /* child data */
     yyjson_mut_doc *doc;
     yyjson_alc *alc;
 
     ArrPt(Destroyer) *views;
+
+    char_t cur_line[256];
+    uint32_t cur_start;
+    uint32_t line_num;
+    SetSt(line) *dict;
+    ArrSt(line_pos) *pos_lens;
 };
 
 /*

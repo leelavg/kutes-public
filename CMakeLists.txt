@@ -42,9 +42,9 @@ file(GLOB NAP_PATCHES "support/patches/nap-*.patch")
 # MIT LICENSE
 CPMAddPackage(
   NAME nappgui_src
-  # commit is on Feb 9, 2025
-  URL https://github.com/frang75/nappgui_src/archive/788f43a.tar.gz
-  URL_HASH SHA256=59e2d11a97eefa3e237106f59b60202a3f17db732ab4d2aa3b804cc3235a3f8f
+  # commit is on Mar 26, 2025
+  URL https://github.com/frang75/nappgui_src/archive/4732dc9.tar.gz
+  URL_HASH SHA256=a0350fa5a0b1f5d5a045614d412ff36690fe94f96af3acdbd560375911d6e9fe
   PATCHES ${NAP_PATCHES}
   DOWNLOAD_ONLY TRUE
   CUSTOM_CACHE_KEY cache
@@ -95,7 +95,7 @@ if (yyjson_ADDED)
 endif()
 
 if (boron_ADDED)
-  add_subdirectory(${boron_SOURCE_DIR} EXCLUDE_FROM_ALL)
+  add_subdirectory(${boron_SOURCE_DIR} EXCLUDE_FROM_ALL SYSTEM)
 endif()
 
 if (rax_ADDED)

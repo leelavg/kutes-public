@@ -1934,6 +1934,18 @@ dbindst_t dbind_unreg_imp(const char_t *type)
 
 /*---------------------------------------------------------------------------*/
 
+void dbind_defaults_unreg_imp(const char_t *type)
+{
+    bool_t is_pointer = FALSE;
+    uint32_t alias_id = UINT32_MAX;
+    DBind *bind = i_dbind_from_typename(type, &is_pointer, &alias_id);
+    cassert_unref(is_pointer == FALSE, is_pointer);
+    if (bind != NULL)
+        i_defaults_destroy(bind);
+}
+
+/*---------------------------------------------------------------------------*/
+
 static void i_init_bind(byte_t *data, const DBind *bind)
 {
     cassert_no_null(bind);

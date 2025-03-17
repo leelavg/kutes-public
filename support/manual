@@ -30,6 +30,10 @@ tail -f /tmp/f{1,2}
 
 start "" /wait /b /i cmd /c "title kutes && tasklist /v /fi "imagename eq cmd.exe" /fo csv | findstr kutes && <cmd>"
 
+while read; do echo "$REPLY"; sleep $(seq 0 0.1 0.5 | shuf -n1); done < .cache/test-csvs-min
+while read; do echo "$REPLY"; sleep $(seq 0 0.1 0.5 | shuf -n1); done < .cache/test-csvs
+while read; do echo "$REPLY"; sleep $(seq 0 0.1 0.5 | shuf -n1); done < .cache/test-pods
+
 ===== bugs/known issues
 
 when the window is closed with a long running command (ex: sleep infinity) internal schedule errors out even after stopping the proc, just continue
