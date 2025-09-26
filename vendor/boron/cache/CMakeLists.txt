@@ -34,6 +34,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_definitions(-DCONFIG_HASHMAP=1 -DCONFIG_ISOLATE=1)
 add_library(boron ${src})
 target_link_libraries(boron PUBLIC m)
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/urlan/unset.h" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 target_include_directories(boron
         PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/urlan>
         PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/eval>

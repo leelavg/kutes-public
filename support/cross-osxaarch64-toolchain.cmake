@@ -1,6 +1,4 @@
-# ghcr.io/shepherdjerred/macos-cross-compiler:latest@sha256:a4ced303153cbbef65c7971fb742bad8423d33bc3ead276f11367b8e4ad580a2
-# install cmake, ninja-build, patch in container
-# ln -sr /sdk /MacOSX13.1.sdk (referred from /sdk/SDKSettings.json)
+# same pre-req steps as mentioned in cross-osxamd64-toolchain.cmake (doing once is enough)
 set(CMAKE_SYSTEM_NAME Darwin)
 set(CMAKE_C_COMPILER aarch64-apple-darwin22-clang)
 set(CMAKE_CXX_COMPILER aarch64-apple-darwin22-clang++)

@@ -1,6 +1,9 @@
-# ghcr.io/shepherdjerred/macos-cross-compiler:latest@sha256:a4ced303153cbbef65c7971fb742bad8423d33bc3ead276f11367b8e4ad580a2
-# install cmake, ninja-build, patch in container
-# ln -sr /sdk /MacOSX13.1.sdk (referred from /sdk/SDKSettings.json)
+# podman run -v $PWD:/workspace:Z --rm -it \
+# ghcr.io/shepherdjerred/macos-cross-compiler:latest@sha256:a4ced303153cbbef65c7971fb742bad8423d33bc3ead276f11367b8e4ad580a2 \
+# /bin/bash
+# > apt install cmake ninja-build patch && rm -rf /var/lib/apt/lists/*
+# > ln -sr /sdk /MacOSX13.1.sdk (referred from /sdk/SDKSettings.json)
+# podman commit <container-id> for-kutes # and reuse
 set(CMAKE_SYSTEM_NAME Darwin)
 set(CMAKE_C_COMPILER x86_64-apple-darwin22-clang)
 set(CMAKE_CXX_COMPILER x86_64-apple-darwin22-clang++)
